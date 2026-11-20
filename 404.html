@@ -1,0 +1,2506 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>季策 · 基金季度配置助手（2026-11-19）</title>
+<meta name="description" content="每季度生成一次基金配置建议：风险测评、核心-卫星分配、组合风险估算与调仓清单。" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f6f5c'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E5%AD%A3%3C/text%3E%3C/svg%3E" />
+<meta name="theme-color" content="#0f6f5c" />
+<style>
+:root {
+  --bg: #f5f5f1;
+  --card: #ffffff;
+  --ink: #14181f;
+  --ink-2: #3d4553;
+  --muted: #7a8291;
+  --line: #e6e4dc;
+  --line-2: #efece4;
+  --brand: #0f6f5c;
+  --brand-soft: #e8f2ef;
+  --buy: #0f6f5c;
+  --sell: #b45309;
+  --hold: #6b7280;
+  --warn-bg: #fdf6ec;
+  --radius: 16px;
+  --shadow: 0 1px 2px rgba(20, 24, 31, 0.04), 0 8px 24px rgba(20, 24, 31, 0.04);
+  --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; font-size: inherit; cursor: pointer; }
+input, select { font-family: inherit; font-size: inherit; color: var(--ink); }
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 26px;
+  background: rgba(245, 245, 241, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 9px; font-weight: 700; letter-spacing: -0.02em; }
+.brand b { font-size: 19px; }
+.brand span { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
+.topbar .spacer { flex: 1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; color: var(--ink-2);
+  background: #fff; border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.chip.q { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); }
+.chip.warn { background: var(--warn-bg); border-color: #f0ddc0; color: #8a5a12; }
+
+/* ---------- 标签页 ---------- */
+.tabs {
+  display: flex; gap: 4px; padding: 10px 26px 0; max-width: 1280px; margin: 0 auto;
+  overflow-x: auto; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button {
+  border: 0; background: transparent; color: var(--muted); white-space: nowrap;
+  padding: 8px 14px; border-radius: 10px; font-weight: 500; flex: 0 0 auto;
+}
+.tabs button:hover { background: #edede7; color: var(--ink); }
+.tabs button.on { background: #fff; color: var(--ink); box-shadow: var(--shadow); font-weight: 600; }
+
+main { max-width: 1280px; margin: 0 auto; padding: 18px 26px 60px; }
+.view { display: none; }
+.view.on { display: block; animation: fade 0.18s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+/* ---------- 通用卡片 ---------- */
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 18px; margin-bottom: 16px;
+}
+.card h3 {
+  margin: 0 0 12px; font-size: 13px; font-weight: 600;
+  color: var(--muted); letter-spacing: 0.04em; text-transform: none;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card h3 .hint { font-weight: 400; letter-spacing: 0; color: #a3a9b4; font-size: 12px; }
+
+.plan-grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+.plan-grid > * { min-width: 0; }
+.card, .report-head, .report-head > div { min-width: 0; }
+.report-sub { overflow-wrap: anywhere; }
+@media (max-width: 980px) { .plan-grid { grid-template-columns: 1fr; } .topbar { flex-wrap: wrap; } }
+
+/* ---------- 控制面板 ---------- */
+.field { margin-bottom: 16px; }
+.field > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.money-input { display: flex; align-items: center; gap: 6px; }
+.money-input input {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: #fbfbf8; outline: none;
+}
+.money-input input:focus { border-color: var(--brand); background: #fff; }
+.money-input .unit { color: var(--muted); font-size: 13px; }
+
+.risk-opts { display: grid; gap: 6px; }
+.risk-opt {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 11px; border-radius: 11px; border: 1px solid var(--line);
+  background: #fbfbf8; text-align: left; transition: 0.12s;
+}
+.risk-opt:hover { border-color: #cfd6d2; background: #fff; }
+.risk-opt.on { border-color: var(--brand); background: var(--brand-soft); box-shadow: inset 0 0 0 1px var(--brand); }
+.risk-opt .rk { font-weight: 600; font-size: 13px; }
+.risk-opt .rd { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.risk-opt .mix { flex: 1; min-width: 0; }
+.risk-opt .bar { margin-top: 5px; display: flex; height: 4px; border-radius: 3px; overflow: hidden; gap: 1px; }
+.risk-opt .bar i { display: block; height: 100%; }
+
+.hold-list { display: grid; gap: 8px; }
+.hold-row { display: grid; grid-template-columns: 1fr 96px 26px; gap: 6px; align-items: center; }
+.hold-row select, .hold-row input {
+  width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px;
+  background: #fbfbf8; font-size: 12.5px; outline: none; min-width: 0;
+}
+.hold-row input { text-align: right; font-variant-numeric: tabular-nums; }
+.hold-row button {
+  border: 0; background: transparent; color: #b9bec7; font-size: 16px; line-height: 1; padding: 4px;
+}
+.hold-row button:hover { color: var(--sell); }
+.hold-empty { font-size: 12px; color: var(--muted); padding: 6px 0; }
+.link-btn {
+  border: 0; background: transparent; color: var(--brand); font-size: 12.5px;
+  padding: 4px 0; font-weight: 500;
+}
+.link-btn:hover { text-decoration: underline; }
+
+.btn {
+  width: 100%; border: 0; border-radius: 11px; padding: 12px;
+  background: var(--brand); color: #fff; font-weight: 600; font-size: 14px;
+  transition: 0.15s;
+}
+.btn:hover { background: #0b5a4a; }
+.btn:disabled { background: #cfd3cd; color: #f6f6f3; cursor: not-allowed; }
+.btn.ghost {
+  background: #fff; color: var(--ink); border: 1px solid var(--line); width: auto; padding: 8px 14px;
+  font-weight: 500; font-size: 13px;
+}
+.btn.ghost:hover { background: #f7f7f2; border-color: #cfd6d2; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- 报告 ---------- */
+.report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.report-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+.report-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; background: var(--brand-soft); color: var(--brand);
+}
+.badge.gray { background: #f0f0ec; color: var(--muted); }
+.badge.amber { background: var(--warn-bg); color: #8a5a12; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 4px; }
+@media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { border: 1px solid var(--line-2); border-radius: 12px; padding: 11px 13px; background: #fbfbf8; }
+.kpi .k { font-size: 11.5px; color: var(--muted); }
+.kpi .v { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.kpi .v small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+
+.mixbar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; margin: 8px 0 10px; gap: 2px; }
+.mixbar > div { position: relative; display: flex; align-items: center; justify-content: center; font-size: 10.5px; color: #fff; font-weight: 600; overflow: hidden; }
+.mixlegend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-2); }
+.mixlegend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+
+table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tablewrap { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.grid td .fname { white-space: normal; overflow-wrap: anywhere; }
+.th-short { display: none; }
+#poolTable th { white-space: nowrap; }
+#poolTable td:first-child { min-width: 150px; max-width: 260px; }
+table.grid th {
+  text-align: left; font-size: 11.5px; font-weight: 500; color: var(--muted);
+  padding: 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+table.grid td { padding: 9px 8px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+table.grid tr:last-child td { border-bottom: 0; }
+table.grid tbody tr:hover { background: #fcfcf9; }
+table.grid .num { text-align: right; font-variant-numeric: tabular-nums; }
+.fname { font-weight: 500; }
+.fcode { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.mix-pill {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+  padding: 2px 7px; border-radius: 6px; background: #f2f2ee; color: var(--ink-2); white-space: nowrap;
+}
+.tone-buy { color: var(--buy); font-weight: 600; }
+.tone-sell { color: var(--sell); font-weight: 600; }
+.tone-hold { color: var(--hold); font-weight: 500; }
+.wbar { width: 56px; height: 4px; border-radius: 3px; background: #eeeee9; display: inline-block; vertical-align: middle; overflow: hidden; }
+.wbar i { display: block; height: 100%; background: var(--brand); }
+
+.notes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.notes li { font-size: 12.5px; color: var(--ink-2); padding-left: 14px; position: relative; }
+.notes li::before { content: ""; position: absolute; left: 0; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--brand); opacity: 0.6; }
+
+.empty {
+  text-align: center; padding: 46px 20px; border: 1px dashed var(--line);
+  border-radius: 14px; background: #fbfbf8;
+}
+.empty .big { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.empty .sub { color: var(--muted); font-size: 12.5px; max-width: 420px; margin: 0 auto 16px; }
+
+/* ---------- 基金池 ---------- */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar input[type="search"] {
+  flex: 1; min-width: 180px; padding: 8px 11px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fbfbf8; outline: none;
+}
+.toolbar input[type="search"]:focus { border-color: var(--brand); background: #fff; }
+.pill {
+  border: 1px solid var(--line); background: #fff; color: var(--ink-2);
+  padding: 6px 11px; border-radius: 999px; font-size: 12px;
+}
+.pill.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { color: var(--ink); }
+.sortable.asc::after { content: " ↑"; }
+.sortable.desc::after { content: " ↓"; }
+
+.drawer {
+  position: fixed; inset: 0; background: rgba(20, 24, 31, 0.28);
+  display: none; z-index: 40; align-items: flex-end; justify-content: center;
+}
+.drawer.on { display: flex; }
+.drawer-body {
+  background: #fff; width: min(560px, 100%); max-height: 82vh; overflow: auto;
+  border-radius: 18px 18px 0 0; padding: 20px; animation: up 0.2s ease;
+}
+@keyframes up { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer h4 { margin: 0; font-size: 16px; }
+.factor-row { display: grid; grid-template-columns: 96px 1fr 52px; gap: 10px; align-items: center; margin: 9px 0; font-size: 12.5px; }
+.factor-row .bar { height: 6px; background: #f0f0eb; border-radius: 3px; overflow: hidden; }
+.factor-row .bar i { display: block; height: 100%; background: linear-gradient(90deg, #7fb8a8, var(--brand)); }
+.factor-row b { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+
+/* ---------- 历史 ---------- */
+.hist-item { border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px; margin-bottom: 10px; background: #fff; }
+.hist-top { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+.hist-q { font-weight: 700; font-size: 15px; }
+.hist-meta { color: var(--muted); font-size: 12px; }
+
+/* ---------- 方法 ---------- */
+.prose { max-width: 760px; font-size: 13.5px; color: var(--ink-2); }
+.prose h4 { font-size: 14px; color: var(--ink); margin: 22px 0 8px; }
+.prose h4:first-child { margin-top: 0; }
+.prose p { margin: 8px 0; }
+.prose code {
+  font-family: var(--mono); font-size: 12px; background: #f2f2ee;
+  padding: 1px 5px; border-radius: 5px;
+}
+.prose table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+.prose th, .prose td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line-2); }
+.callout {
+  border-left: 3px solid var(--brand); background: var(--brand-soft);
+  padding: 12px 14px; border-radius: 0 10px 10px 0; font-size: 12.5px; margin: 12px 0;
+}
+.callout.warn { border-color: #d99a3f; background: var(--warn-bg); }
+
+/* ---------- 提示 ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px);
+  background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 10px;
+  font-size: 13px; opacity: 0; pointer-events: none; transition: 0.22s; z-index: 60;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+footer.foot {
+  max-width: 1280px; margin: 0 auto; padding: 0 26px 40px;
+  color: #9aa0aa; font-size: 11.5px; line-height: 1.7;
+}
+@media print {
+  .topbar, .tabs, .side, .btn-row, footer.foot { display: none !important; }
+  body { background: #fff; }
+  .card { box-shadow: none; border-color: #ddd; break-inside: avoid; }
+}
+
+/* ---------- 手机端 ---------- */
+@media (max-width: 560px) {
+  .topbar { padding: 10px 14px; gap: 8px; }
+  .brand b { font-size: 17px; }
+  .brand span { display: none; }
+  main { padding: 12px 14px 48px; }
+  .tabs { padding: 8px 14px 0; gap: 2px; }
+  .tabs button { padding: 8px 10px; font-size: 13px; }
+  .card { padding: 15px; border-radius: 14px; }
+  .report-title { font-size: 19px; }
+  .kpi .v { font-size: 19px; }
+  footer.foot { padding: 0 14px 32px; }
+  .chip { font-size: 11px; padding: 3px 8px; }
+  table.grid { font-size: 12.5px; }
+  table.grid th, table.grid td { padding: 7px 6px; }
+  .money-input input { font-size: 18px; }
+}
+
+/* 调仓表在窄屏只保留关键列，避免横向溢出 */
+@media (max-width: 720px) {
+  #allocTable { table-layout: fixed; font-size: 12px; }
+  #allocTable .c-hide-sm { display: none; }
+  #allocTable th, #allocTable td { padding: 7px 4px; }
+  #allocTable .mix-pill { display: none; }
+  #allocTable th:nth-child(1) { width: 30%; }
+  #allocTable th:nth-child(3) { width: 13%; }
+  #allocTable th:nth-child(4) { width: 17%; }
+  #allocTable th:nth-child(6) { width: 17%; }
+  #allocTable th:nth-child(7) { width: 11%; }
+  #allocTable th:nth-child(8) { width: 12%; }
+  #allocTable .wbar { display: none; }
+  .th-long { display: none; }
+  .th-short { display: inline; }
+  #allocTable th { font-size: 11px; letter-spacing: -0.01em; }
+  #poolTable .c-1y, #poolTable .c-vol, #poolTable .c-sharpe, #poolTable .c-scale { display: none; }
+  #poolTable { table-layout: fixed; }
+  #poolTable th:nth-child(1) { width: 40%; }
+  #poolTable th:nth-child(2) { width: 21%; }
+  #poolTable th:nth-child(4) { width: 15%; }
+  #poolTable th:nth-child(5) { width: 15%; }
+  #poolTable th:nth-child(9) { width: 9%; }
+  #poolTable td:first-child { min-width: 0; max-width: none; }
+  #poolTable .mix-pill { padding: 2px 5px; font-size: 10.5px; }
+  #poolTable .wbar { display: none; }
+  #poolTable th, #poolTable td { padding: 7px 4px; }
+  #allocTable td .fname { font-size: 12.5px; line-height: 1.35; }
+  #allocTable .reasons span:nth-child(n + 2) { display: none; }
+}
+
+/* ---------- 持仓行（含买入日期） ---------- */
+.hold-item { display: grid; gap: 3px; }
+.hold-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); padding-left: 2px; }
+.hold-meta input[type="date"] {
+  padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fbfbf8; font-size: 11.5px; color: var(--ink-2); outline: none;
+}
+.hold-meta input[type="date"]:focus { border-color: var(--brand); background: #fff; }
+.hold-meta span { color: #a3a9b4; }
+.sell-hint td { font-size: 12px; color: #8a5a12; background: var(--warn-bg); padding: 7px 10px !important; line-height: 1.55; }
+
+/* ---------- 换仓提示 ---------- */
+.swap-card { border-color: #f0d9b5; background: linear-gradient(180deg, #fffdf8, #fff); }
+.swap-lead { font-size: 12.5px; color: var(--ink-2); margin: 0 0 6px; line-height: 1.6; }
+.swap-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+  gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--line-2);
+}
+.swap-row:last-of-type { border-bottom: 0; }
+.swap-side { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.swap-tag {
+  font-size: 10.5px; padding: 2px 6px; border-radius: 5px; font-weight: 600;
+  flex: 0 0 auto; margin-top: 2px;
+}
+.swap-tag.sell { background: #fdf1e3; color: #8a5a12; }
+.swap-tag.buy { background: var(--brand-soft); color: var(--brand); }
+.swap-arrow { text-align: center; color: #b9bec7; }
+.swap-inline { margin-top: 14px; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.swap-title { font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+.swap-title .hint { font-weight: 400; color: #a3a9b4; margin-left: 6px; }
+@media (max-width: 560px) {
+  .swap-row { grid-template-columns: 1fr; gap: 4px; }
+  .swap-arrow { transform: rotate(90deg); padding: 2px 0; }
+}
+
+/* ---------- 人话结论 ---------- */
+.plainbox {
+  margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+  background: #f4f8f6; border: 1px solid #dbe9e3;
+}
+.plainbox-title {
+  font-size: 11.5px; font-weight: 700; color: var(--brand);
+  letter-spacing: 0.08em; margin-bottom: 6px;
+}
+.plainbox p { margin: 0 0 6px; font-size: 13px; color: var(--ink-2); line-height: 1.75; }
+.plainbox p:last-child { margin-bottom: 0; }
+.plainbox-next { font-size: 12.5px !important; color: #4b5a63 !important; }
+.kpi-sub { font-size: 10.5px; color: #9aa0aa; line-height: 1.45; margin-top: 4px; }
+
+/* ---------- 理由标签 ---------- */
+.reasons { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.reasons span {
+  font-size: 10px; padding: 1px 6px; border-radius: 5px;
+  background: #f0f4f2; color: #4f6b60; white-space: nowrap;
+}
+
+/* ---------- 新手引导 ---------- */
+.welcome h2 { font-size: 19px; margin: 0 0 4px; letter-spacing: -0.02em; }
+.welcome-sub { color: var(--muted); font-size: 12.5px; margin: 0 0 16px; }
+.steps { display: grid; gap: 10px; margin-bottom: 16px; }
+.step { display: flex; gap: 11px; align-items: flex-start; }
+.step i {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--brand); color: #fff; font-style: normal; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.step b { display: block; font-size: 13.5px; }
+.step span { font-size: 12px; color: var(--muted); }
+.quick-amt { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.quick-amt button {
+  border: 1px solid var(--line); background: #fff; color: var(--ink-2);
+  padding: 5px 11px; border-radius: 999px; font-size: 12px;
+}
+.quick-amt button:hover { border-color: var(--brand); color: var(--brand); }
+.quick-amt button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.welcome-note { color: #a3a9b4; font-size: 11.5px; margin: 12px 0 0; }
+
+/* ---------- 名词解释 ---------- */
+.glossary td:first-child { width: 88px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.glossary td { font-size: 12.5px; color: var(--ink-2); line-height: 1.7; }
+
+/* ---------- 卖出提醒 ---------- */
+.alert-card { border-color: #f3d6d0; background: linear-gradient(180deg, #fff9f7, #fff); }
+.badge.red { background: #fdeceb; color: #b42318; }
+.alert-row { padding: 10px 0; border-bottom: 1px dashed var(--line-2); }
+.alert-row:last-of-type { border-bottom: 0; }
+.alert-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.alert-head b { font-size: 13.5px; }
+.alert-hits { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--ink-2); line-height: 1.7; }
+.alert-swap { margin-top: 6px; font-size: 12.5px; color: var(--brand); }
+
+/* ---------- 自动换仓记录 ---------- */
+.auto-box { margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px; background: #f4f8f6; border: 1px solid #dbe9e3; }
+.auto-title { font-size: 11.5px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
+.auto-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--ink-2); padding: 3px 0; flex-wrap: wrap; }
+.auto-row.undone { opacity: 0.55; text-decoration: line-through; }
+.auto-time { font-family: var(--mono); font-size: 10.5px; color: #9aa0aa; }
+.auto-body { flex: 1; min-width: 0; }
+.alert-swap.muted { color: #8a5a12; }
+
+/* 分享地址（IPv6 很长，必须能断行） */
+#shareInfo b {
+  display: inline-block; max-width: 100%;
+  overflow-wrap: anywhere; word-break: break-all; line-height: 1.5;
+}
+
+</style>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <script>
+    if (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><b>季策</b><span>基金季度配置助手</span></div>
+    <div class="spacer"></div>
+    <div class="chip q" id="chipQuarter">—</div>
+    <div class="chip" id="chipNext">—</div>
+    <div class="chip" id="chipData">—</div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="plan" class="on">本季推荐</button>
+    <button data-view="pool">基金池</button>
+    <button data-view="history">历史报告</button>
+    <button data-view="method">方法与边界</button>
+  </nav>
+
+  <main>
+    <section class="view on" id="view-plan">
+      <div class="plan-grid">
+        <aside class="side" id="side"></aside>
+        <div id="planMain"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-pool">
+      <div class="card">
+        <h3>候选基金池 <span class="hint" id="poolCount"></span></h3>
+        <div class="toolbar" id="poolToolbar"></div>
+        <div id="poolTable"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-history">
+      <div class="card">
+        <h3>历史季度报告 <span class="hint">每季度只保留一份正式报告</span></h3>
+        <div id="historyList"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-method">
+      <div class="card"><div class="prose" id="methodBody"></div></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    本工具仅基于公开净值数据做规则化配置演示，不构成投资建议，也不预测市场。基金有风险，投资需谨慎；历史业绩不代表未来表现。
+  </footer>
+
+  <div class="drawer" id="drawer"><div class="drawer-body" id="drawerBody"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+(function(){
+"use strict";
+/* 季策单文件版 · 数据截至 2026-11-19 · 构建于 2026-11-20 20:07 */
+
+window.__QFA_DATA__ = {"asOf":"2026-11-19","riskFree":0.02,"funds":[{"code":"000216","name":"华安黄金ETF联接A","bucket":"alt","tag":"gold","type":"指数型-其他","feeRate":0.06,"scale":104.24,"stockPct":0,"manager":"许之彦","managerYears":20,"inception":"2013-08-21","nav":2.6421,"maxDaily":0.1137,"start":"2013-08-21","end":"2026-11-19","days":3219,"r3m":-0.19819329711831213,"r6m":-0.23630964297570778,"r1y":-0.17230582404125427,"r3y":0.6383609907214425,"cagr3y":0.1788807232790175,"vol1y":0.2961837710864322,"vol3y":0.20898615837642448,"mdd3y":-0.38529867937724327,"sharpe3y":0.7602451976405183,"calmar3y":0.46426508278757067},{"code":"000419","name":"大摩优质信价纯债A","bucket":"bond","tag":"core","type":"债券型-长债","feeRate":0.08,"scale":1.41,"stockPct":0,"manager":"施同亮","managerYears":9,"inception":"2014-11-24","nav":1.1552,"maxDaily":0.0256,"start":"2014-11-24","end":"2026-11-19","days":2877,"r3m":0.005596267949108613,"r6m":0.012150669048572649,"r1y":0.030630332245110248,"r3y":0.12851952513288278,"cagr3y":0.04112536132297451,"vol1y":0.007443160447699566,"vol3y":0.011073665238309953,"mdd3y":-0.01293539247493003,"sharpe3y":1.9077117529153906,"calmar3y":3.1792897975596186},{"code":"003009","name":"国联盈泽中短债A","bucket":"bond","tag":"short","type":"债券型-中短债","feeRate":0.03,"scale":11.61,"stockPct":0,"manager":"潘巍","managerYears":7,"inception":"2017-03-26","nav":1.3042,"maxDaily":0.12602,"start":"2017-03-26","end":"2026-11-19","days":2345,"r3m":0.004507965033280437,"r6m":0.009441461648544536,"r1y":0.02244395918884834,"r3y":0.07603654612861233,"cagr3y":0.024728953476868654,"vol1y":0.0025436116368979292,"vol3y":0.0028328341334029803,"mdd3y":-0.0027972810378854573,"sharpe3y":1.6693365210154165,"calmar3y":8.840353594060737},{"code":"005273","name":"华商可转债债券A","bucket":"bond","tag":null,"type":"债券型-混合二级","feeRate":0.08,"scale":31.55,"stockPct":0,"manager":"张永志","managerYears":16,"inception":"2017-12-21","nav":2.4247,"maxDaily":0.071,"start":"2017-12-21","end":"2026-11-19","days":2165,"r3m":-0.06105679811399989,"r6m":0.039602349480022836,"r1y":0.2516326689951387,"r3y":0.5905579031152259,"cagr3y":0.16730181636700237,"vol1y":0.22306333288572477,"vol3y":0.18548267267627624,"mdd3y":-0.19143250356172659,"sharpe3y":0.7941540535384074,"calmar3y":0.8739467606296891},{"code":"110027","name":"易方达安心回报债券A","bucket":"bond","tag":"core","type":"债券型-混合二级","feeRate":0.08,"scale":129.92,"stockPct":0,"manager":"张清华","managerYears":12,"inception":"2011-06-20","nav":1.9942,"maxDaily":0.093543,"start":"2011-06-20","end":"2026-11-19","days":3739,"r3m":-0.14763124239796965,"r6m":-0.14260635197714833,"r1y":-0.07178564588381786,"r3y":0.059118944991367384,"cagr3y":0.01933024883953216,"vol1y":0.1057889492944735,"vol3y":0.07330739016319317,"mdd3y":-0.1770821572363297,"sharpe3y":-0.009136202488956083,"calmar3y":0.10915977725375495},{"code":"000509","name":"广发钱袋子货币A","bucket":"cash","tag":"mmf","type":"货币型-普通货币","feeRate":null,"scale":1010.95,"stockPct":0,"manager":"任爽","managerYears":13,"inception":"2014-01-14","nav":null,"maxDaily":0.002,"start":"2014-01-14","end":"2026-11-19","days":4674,"r3m":0.00237031746031746,"r6m":0.00474063492063492,"r1y":0.00948126984126984,"r3y":0.00948126984126984,"cagr3y":0.00948126984126984,"vol1y":0.0015,"vol3y":0.0015,"mdd3y":0,"sharpe3y":-7.012486772486773,"calmar3y":0},{"code":"000198","name":"天弘余额宝货币","bucket":"cash","tag":"mmf","type":"货币型-普通货币","feeRate":null,"scale":6451.36,"stockPct":0,"manager":"刘莹","managerYears":8,"inception":"2013-05-29","nav":null,"maxDaily":0.002,"start":"2013-05-29","end":"2026-11-19","days":4921,"r3m":0.0021792261904761906,"r6m":0.004358452380952381,"r1y":0.008716904761904763,"r3y":0.008716904761904763,"cagr3y":0.008716904761904763,"vol1y":0.0015,"vol3y":0.0015,"mdd3y":0,"sharpe3y":-7.5220634920634915,"calmar3y":0},{"code":"006809","name":"泰康香港银行指数A","bucket":"equity","tag":null,"type":"指数型-股票","feeRate":0.1,"scale":7.92,"stockPct":0,"manager":"袁帅","managerYears":2,"inception":"2019-04-15","nav":1.9031,"maxDaily":0.08900000000000001,"start":"2019-04-15","end":"2026-11-19","days":1843,"r3m":0.03005019997288949,"r6m":0.07743922695969463,"r1y":0.1575632547390453,"r3y":1.0056848206367968,"cagr3y":0.2611136581777631,"vol1y":0.15918282205267437,"vol3y":0.1674703753447205,"mdd3y":-0.12323961133681904,"sharpe3y":1.4397391639055892,"calmar3y":2.1187478225984377},{"code":"012835","name":"招商景气精选股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.15,"scale":5.41,"stockPct":0,"manager":"梁辰","managerYears":8,"inception":"2021-07-19","nav":1.6798,"maxDaily":0.0684,"start":"2021-07-19","end":"2026-11-19","days":1263,"r3m":-0.08670268032193817,"r6m":0.00016149449622027134,"r1y":0.16123908069345805,"r3y":1.1367964878998347,"cagr3y":0.28801539432798196,"vol1y":0.2896182300947011,"vol3y":0.21875818563807958,"mdd3y":-0.24322723935303348,"sharpe3y":1.2251673853768152,"calmar3y":1.1841411969073927},{"code":"007343","name":"嘉实科技创新混合","bucket":"equity","tag":null,"type":"混合型-偏股","feeRate":0.15,"scale":61.1,"stockPct":0,"manager":"王贵重","managerYears":7,"inception":"2019-05-06","nav":5.4429,"maxDaily":0.1242,"start":"2019-05-06","end":"2026-11-19","days":1787,"r3m":-0.08451302970303198,"r6m":0.024478472316010302,"r1y":0.5444409685662712,"r3y":1.8107188714259674,"cagr3y":0.4112560059694923,"vol1y":0.40985530179122315,"vol3y":0.3425972442733077,"mdd3y":-0.318262853177787,"sharpe3y":1.142029051632905,"calmar3y":1.2921897791815424},{"code":"501026","name":"财通多策略福享混合(LOF)A","bucket":"equity","tag":null,"type":"混合型-灵活","feeRate":0.15,"scale":5.79,"stockPct":0,"manager":"贾雅楠","managerYears":2,"inception":"2016-09-17","nav":1.9653,"maxDaily":0.1066,"start":"2016-09-17","end":"2026-11-19","days":2432,"r3m":-0.269096803759717,"r6m":-0.1299581555751641,"r1y":0.34091695065029026,"r3y":1.9010538766151925,"cagr3y":0.4262158703045724,"vol1y":0.4525853218848988,"vol3y":0.3737438626339061,"mdd3y":-0.3833632340390881,"sharpe3y":1.0868830525853308,"calmar3y":1.111780766804349},{"code":"009707","name":"工银新兴制造混合A","bucket":"equity","tag":null,"type":"混合型-偏股","feeRate":0.15,"scale":63.41,"stockPct":0,"manager":"马丽娜","managerYears":4,"inception":"2020-08-19","nav":3.4277,"maxDaily":0.1437,"start":"2020-08-19","end":"2026-11-19","days":1502,"r3m":-0.33393761699047053,"r6m":-0.22586360176840736,"r1y":0.1812936159769547,"r3y":1.8124424539686208,"cagr3y":0.4115444160756425,"vol1y":0.5098150140255743,"vol3y":0.38190549118685824,"mdd3y":-0.5271795732978707,"sharpe3y":1.0252390319364855,"calmar3y":0.7806531909063723},{"code":"008988","name":"大成科技创新混合A","bucket":"equity","tag":null,"type":"混合型-偏股","feeRate":0.15,"scale":21.21,"stockPct":0,"manager":"郭玮羚","managerYears":5,"inception":"2020-04-28","nav":3.2341,"maxDaily":0.11939999999999999,"start":"2020-04-28","end":"2026-11-19","days":1584,"r3m":-0.3317984035401629,"r6m":-0.31660215945365056,"r1y":0.10000257594337225,"r3y":1.7620845141056773,"cagr3y":0.40306886562434885,"vol1y":0.475258333902966,"vol3y":0.3815966185389398,"mdd3y":-0.5451210313403858,"sharpe3y":1.003858124034343,"calmar3y":0.739411694744655},{"code":"019454","name":"华泰柏瑞中韩半导体ETF发起式联接(QDII)A","bucket":"equity","tag":null,"type":"指数型-海外股票","feeRate":0.12,"scale":1.07,"stockPct":0,"manager":"李沐阳","managerYears":5,"inception":"2023-09-21","nav":2.6674,"maxDaily":0.12050000000000001,"start":"2023-09-21","end":"2026-11-19","days":759,"r3m":-0.28377423410572333,"r6m":-0.2468480662189695,"r1y":0.3322666199964823,"r3y":1.6371691661484409,"cagr3y":0.3815904728637023,"vol1y":0.5460918327906374,"vol3y":0.37781791898065087,"mdd3y":-0.42652193683284,"sharpe3y":0.9570495593201876,"calmar3y":0.8946561475764212},{"code":"005825","name":"申万菱信智能驱动股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.15,"scale":10.89,"stockPct":0,"manager":"付娟","managerYears":14,"inception":"2018-06-12","nav":6.3294,"maxDaily":0.1378,"start":"2018-06-12","end":"2026-11-19","days":2039,"r3m":-0.3666328449233396,"r6m":-0.2191293045035111,"r1y":0.34614447790613556,"r3y":1.5799764671459964,"cagr3y":0.37152980002161495,"vol1y":0.5141955119426773,"vol3y":0.3736989350203184,"mdd3y":-0.45193019727323613,"sharpe3y":0.9406764833367852,"calmar3y":0.8220955410000822},{"code":"002289","name":"华商改革创新股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.15,"scale":3.42,"stockPct":0,"manager":"刘力","managerYears":5,"inception":"2018-03-01","nav":4.4824,"maxDaily":0.11560000000000001,"start":"2018-03-01","end":"2026-11-19","days":2107,"r3m":-0.2783589965365222,"r6m":-0.06453685465067516,"r1y":0.5388466639890002,"r3y":1.3871898541002636,"cagr3y":0.3364795566523857,"vol1y":0.41643693514885916,"vol3y":0.33771674103365523,"mdd3y":-0.3672836076895478,"sharpe3y":0.9371153934617854,"calmar3y":0.9161300684478145},{"code":"001198","name":"东方惠新灵活配置混合A","bucket":"equity","tag":null,"type":"混合型-灵活","feeRate":0.08,"scale":8.37,"stockPct":0,"manager":"严凯","managerYears":6,"inception":"2015-04-20","nav":2.1202,"maxDaily":0.16820000000000002,"start":"2015-04-20","end":"2026-11-19","days":2816,"r3m":-0.356405662848559,"r6m":-0.22540581768634838,"r1y":0.3214707362634177,"r3y":1.9910449038780316,"cagr3y":0.44081308631495575,"vol1y":0.5675121209720541,"vol3y":0.4552220936989013,"mdd3y":-0.5574616657287079,"sharpe3y":0.9244127034688593,"calmar3y":0.79075049176472},{"code":"001194","name":"景顺长城稳健回报混合A","bucket":"equity","tag":null,"type":"混合型-灵活","feeRate":0.1,"scale":34.94,"stockPct":0,"manager":"江山","managerYears":4,"inception":"2015-04-09","nav":3.664,"maxDaily":0.1274,"start":"2015-04-09","end":"2026-11-19","days":2829,"r3m":-0.44996240826731604,"r6m":-0.44474412478426906,"r1y":-0.13600265175749648,"r3y":1.6777778521504154,"cagr3y":0.38864589626729873,"vol1y":0.4964309082373765,"vol3y":0.4066794785228973,"mdd3y":-0.5564110492358626,"sharpe3y":0.9064777441100776,"calmar3y":0.6984870210630051},{"code":"000828","name":"宏利转型机遇股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.12,"scale":22.84,"stockPct":0,"manager":"孟杰","managerYears":6,"inception":"2014-11-17","nav":4.804,"maxDaily":0.14432,"start":"2014-11-17","end":"2026-11-19","days":2927,"r3m":-0.24354227140481877,"r6m":-0.18792589093139567,"r1y":0.07537173915519269,"r3y":1.4621284109471477,"cagr3y":0.35032062086572346,"vol1y":0.30955437190152335,"vol3y":0.3659813921312305,"mdd3y":-0.32752536737966553,"sharpe3y":0.9025612448276602,"calmar3y":1.06959843650716},{"code":"005550","name":"汇安成长优选混合A","bucket":"equity","tag":null,"type":"混合型-灵活","feeRate":0.15,"scale":16.41,"stockPct":0,"manager":"单柏霖","managerYears":4,"inception":"2018-02-12","nav":2.5574,"maxDaily":0.1441,"start":"2018-02-12","end":"2026-11-19","days":2120,"r3m":-0.3751990600599008,"r6m":-0.296699017856621,"r1y":0.061440844971290876,"r3y":1.7325126433742777,"cagr3y":0.3980436353637955,"vol1y":0.5053886016574366,"vol3y":0.4587575923931575,"mdd3y":-0.5424206549556303,"sharpe3y":0.8240596812614934,"calmar3y":0.7338283152147944},{"code":"010391","name":"易方达战略新兴产业股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.15,"scale":59.07,"stockPct":0,"manager":"欧阳良琦","managerYears":3,"inception":"2021-01-12","nav":1.5611,"maxDaily":0.1058,"start":"2021-01-12","end":"2026-11-19","days":1388,"r3m":-0.4461799199211284,"r6m":-0.36758504478979015,"r1y":-0.02571608585173024,"r3y":1.3551037614608714,"cagr3y":0.3304646766958852,"vol1y":0.4540963135635786,"vol3y":0.3787440491172393,"mdd3y":-0.5394284592642388,"sharpe3y":0.8197215967340034,"calmar3y":0.6126200259189648},{"code":"162201","name":"宏利成长混合","bucket":"equity","tag":null,"type":"混合型-灵活","feeRate":0.15,"scale":39.5,"stockPct":0,"manager":"孙硕","managerYears":4,"inception":"2003-04-24","nav":3.9125,"maxDaily":0.13119999999999998,"start":"2003-04-24","end":"2026-11-19","days":5721,"r3m":-0.46628210508327317,"r6m":-0.42221162846752447,"r1y":-0.009135086311545693,"r3y":1.6822539239791943,"cagr3y":0.3894192014771214,"vol1y":0.4997789131524783,"vol3y":0.4549747068097793,"mdd3y":-0.5863222292943258,"sharpe3y":0.8119554690576944,"calmar3y":0.6641726716481668},{"code":"019141","name":"易方达中证电信主题ETF联接发起式A","bucket":"equity","tag":null,"type":"指数型-股票","feeRate":0.12,"scale":1.31,"stockPct":0,"manager":"刘越洲","managerYears":1,"inception":"2023-09-20","nav":1.8532,"maxDaily":0.0934,"start":"2023-09-20","end":"2026-11-19","days":762,"r3m":-0.166625117974873,"r6m":-0.20689498536177597,"r1y":0.05255518141264659,"r3y":0.8371731806791232,"cagr3y":0.22475728761943525,"vol1y":0.24805872609853002,"vol3y":0.2550428716504168,"mdd3y":-0.22819472555551046,"sharpe3y":0.8028347794801057,"calmar3y":0.9849363830487001},{"code":"010013","name":"易方达信息行业精选股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.15,"scale":45.13,"stockPct":0,"manager":"郑希","managerYears":14,"inception":"2020-08-23","nav":1.6533,"maxDaily":0.1036,"start":"2020-08-23","end":"2026-11-19","days":1500,"r3m":-0.40518893248307475,"r6m":-0.36288113271205225,"r1y":-0.0460779846220446,"r3y":1.1637186082356465,"cagr3y":0.2934021941580851,"vol1y":0.4522711573832637,"vol3y":0.36452103128247687,"mdd3y":-0.532308816415953,"sharpe3y":0.7500313306921887,"calmar3y":0.5511879290926808},{"code":"008326","name":"东财通信A","bucket":"equity","tag":null,"type":"指数型-股票","feeRate":0.1,"scale":9.81,"stockPct":0,"manager":"姚楠燕","managerYears":6,"inception":"2020-01-19","nav":2.3704,"maxDaily":0.1176,"start":"2020-01-19","end":"2026-11-19","days":1657,"r3m":-0.49980234834105697,"r6m":-0.49533586745315117,"r1y":-0.043621573880912035,"r3y":1.2257458135707369,"cagr3y":0.3056452358544093,"vol1y":0.5440651241192257,"vol3y":0.4411053102424202,"mdd3y":-0.606697535863182,"sharpe3y":0.6475669850753462,"calmar3y":0.5037851940828324},{"code":"006502","name":"财通集成电路产业股票A","bucket":"equity","tag":null,"type":"股票型","feeRate":0.15,"scale":18.74,"stockPct":0,"manager":"金梓才","managerYears":12,"inception":"2018-11-28","nav":3.6235,"maxDaily":0.1416,"start":"2018-11-28","end":"2026-11-19","days":1895,"r3m":-0.5527621080749339,"r6m":-0.4238020535078755,"r1y":-0.07868132610103884,"r3y":1.4088545935626189,"cagr3y":0.3405104229028084,"vol1y":0.6080821493503701,"vol3y":0.49815757596373683,"mdd3y":-0.6506143643381073,"sharpe3y":0.6433916462732664,"calmar3y":0.5233675147169884},{"code":"017559","name":"华安上证科创板芯片ETF发起式联接A","bucket":"equity","tag":null,"type":"指数型-股票","feeRate":0.05,"scale":5.75,"stockPct":0,"manager":"刘璇子","managerYears":6,"inception":"2022-12-26","nav":2.273,"maxDaily":0.17329999999999998,"start":"2022-12-26","end":"2026-11-19","days":945,"r3m":-0.33422869145527334,"r6m":-0.29436635526881616,"r1y":0.030824865719236705,"r3y":1.0992431855640334,"cagr3y":0.28042531145632577,"vol1y":0.4907700346723209,"vol3y":0.42306890345763754,"mdd3y":-0.5125078307205635,"sharpe3y":0.6155624044403502,"calmar3y":0.547162979074993},{"code":"007466","name":"华泰柏瑞中证红利低波ETF联接A","bucket":"equity","tag":"dividend","type":"指数型-股票","feeRate":0.12,"scale":75.22,"stockPct":0,"manager":"柳军","managerYears":17,"inception":"2019-07-14","nav":1.7296,"maxDaily":0.076631,"start":"2019-07-14","end":"2026-11-19","days":1769,"r3m":0.09576374083737038,"r6m":0.08549502309003176,"r1y":0.045084814169766174,"r3y":0.31677362825577715,"cagr3y":0.09606684270074939,"vol1y":0.11853075634282939,"vol3y":0.1383947506309669,"mdd3y":-0.13000429395854896,"sharpe3y":0.5496367626224751,"calmar3y":0.7389513051882709},{"code":"110020","name":"易方达沪深300ETF联接A","bucket":"equity","tag":"core","type":"指数型-股票","feeRate":0.12,"scale":158.24,"stockPct":0,"manager":"余海燕","managerYears":15,"inception":"2009-08-25","nav":1.6408,"maxDaily":0.08183,"start":"2009-08-25","end":"2026-11-19","days":4188,"r3m":-0.15230005520720025,"r6m":-0.1601044178100154,"r1y":-0.12673011974016568,"r3y":0.14576034505172286,"cagr3y":0.04640047725246821,"vol1y":0.16617610528631208,"vol3y":0.16975957641224387,"mdd3y":-0.19548678485497295,"sharpe3y":0.15551686573697224,"calmar3y":0.2373586392905875},{"code":"000478","name":"建信中证500指数增强A","bucket":"equity","tag":"core","type":"指数型-股票","feeRate":0.15,"scale":23.14,"stockPct":0,"manager":"叶乐天","managerYears":14,"inception":"2014-01-26","nav":2.7238,"maxDaily":0.0901,"start":"2014-01-26","end":"2026-11-19","days":3098,"r3m":-0.25368362207048856,"r6m":-0.27594369273694674,"r1y":-0.17505641806426941,"r3y":0.0799716351790043,"cagr3y":0.025976585860413515,"vol1y":0.24402151528158067,"vol3y":0.2209494538902346,"mdd3y":-0.3059791569129482,"sharpe3y":0.027049561586074886,"calmar3y":0.08489658616780854},{"code":"012920","name":"易方达全球成长精选混合(QDII)人民币A","bucket":"overseas","tag":null,"type":"QDII-混合偏股","feeRate":0.15,"scale":40.19,"stockPct":0,"manager":"郑希","managerYears":14,"inception":"2022-01-10","nav":3.0535,"maxDaily":0.0941,"start":"2022-01-10","end":"2026-11-18","days":1138,"r3m":-0.22952382528630622,"r6m":-0.2194099743003448,"r1y":0.2304031281276102,"r3y":2.152139385261238,"cagr3y":0.46622899820787334,"vol1y":0.3830620267458801,"vol3y":0.2841513381169309,"mdd3y":-0.431998858479986,"sharpe3y":1.5703920353324043,"calmar3y":1.0792366439307923},{"code":"501226","name":"长城全球新能源车股票发起式(QDII)A","bucket":"overseas","tag":null,"type":"QDII-普通股票","feeRate":0.15,"scale":16.99,"stockPct":0,"manager":"曲少杰","managerYears":7,"inception":"2023-04-20","nav":2.1486,"maxDaily":0.1166,"start":"2023-04-20","end":"2026-11-18","days":826,"r3m":-0.22121293238916973,"r6m":-0.1969061130095371,"r1y":0.10018366895794273,"r3y":0.8899237541397218,"cagr3y":0.2363689637431612,"vol1y":0.34037454943691436,"vol3y":0.2751839777521194,"mdd3y":-0.31312295092076403,"sharpe3y":0.7862702091546272,"calmar3y":0.7548758819757498},{"code":"040021","name":"华安大中华升级股票(QDII)A","bucket":"overseas","tag":null,"type":"QDII-普通股票","feeRate":0.15,"scale":1.57,"stockPct":0,"manager":"苏圻涵","managerYears":20,"inception":"2011-05-16","nav":2.302,"maxDaily":0.153629,"start":"2011-05-16","end":"2026-11-18","days":3767,"r3m":-0.23721700909504984,"r6m":-0.26948007491870785,"r1y":0.0021022969928916613,"r3y":0.8307464519610879,"cagr3y":0.22332748611460884,"vol1y":0.3222087425024651,"vol3y":0.2675143287037353,"mdd3y":-0.3469195547669216,"sharpe3y":0.7600620389190008,"calmar3y":0.6437443005040513},{"code":"539002","name":"建信新兴市场混合(QDII)A","bucket":"overseas","tag":null,"type":"QDII-混合偏股","feeRate":0.16,"scale":35.06,"stockPct":0,"manager":"李博涵","managerYears":13,"inception":"2011-06-20","nav":1.716,"maxDaily":0.12890000000000001,"start":"2011-06-20","end":"2026-11-18","days":3555,"r3m":-0.2956371390331488,"r6m":-0.29213346818635244,"r1y":0.1625100155341792,"r3y":1.1089028712492932,"cagr3y":0.2823862694536712,"vol1y":0.45425167971719865,"vol3y":0.34743546437125516,"mdd3y":-0.37427326850434517,"sharpe3y":0.7552086541553975,"calmar3y":0.7544922205695617},{"code":"457001","name":"国富亚洲机会股票(QDII)A","bucket":"overseas","tag":null,"type":"QDII-普通股票","feeRate":0.15,"scale":12.16,"stockPct":0,"manager":"徐成","managerYears":10,"inception":"2012-02-21","nav":2.1101,"maxDaily":0.153631,"start":"2012-02-21","end":"2026-11-18","days":3557,"r3m":-0.28340794746611,"r6m":-0.2704143683559518,"r1y":0.20836683785141918,"r3y":0.7370617182644259,"cagr3y":0.2020939639391508,"vol1y":0.36798651261443727,"vol3y":0.2732195498485166,"mdd3y":-0.37906903158341776,"sharpe3y":0.6664748698989904,"calmar3y":0.5331323508411636},{"code":"000834","name":"大成纳斯达克100ETF联接(QDII)A","bucket":"overseas","tag":"core","type":"指数型-海外股票","feeRate":0.12,"scale":49.58,"stockPct":0,"manager":"冉凌浩","managerYears":15,"inception":"2014-11-12","nav":5.5613,"maxDaily":0.120224,"start":"2014-11-12","end":"2026-11-18","days":2890,"r3m":-0.1362897152775585,"r6m":-0.11756986089931121,"r1y":-0.041018801559968066,"r3y":0.49733978306911064,"cagr3y":0.1440371336252826,"vol1y":0.21721032337730484,"vol3y":0.20754893139386998,"mdd3y":-0.23327402877488013,"sharpe3y":0.5976283895670592,"calmar3y":0.6174589360922166}],"corr":{"order":["000216","000419","003009","005273","110027","000509","000198","006809","012835","007343","501026","009707","008988","019454","005825","002289","001198","001194","000828","005550","010391","162201","019141","010013","008326","006502","017559","007466","110020","000478","012920","501226","040021","539002","457001","000834"],"matrix":[1,0.105,0.116,0.418,0.337,0,0,0.319,0.214,0.217,0.195,0.207,0.224,0.313,0.202,0.245,0.221,0.213,0.261,0.214,0.231,0.207,0.239,0.239,0.219,0.178,0.211,0.255,0.433,0.448,0.124,0.114,0.415,0.114,0.31,0.01,0.105,1,0.833,0.063,0.171,0,0,-0.052,0.023,0.02,-0.013,0.04,0.01,0.027,0.048,0.055,0.049,0.024,0.065,0.074,0.044,0.028,0.046,0.053,0.05,0.071,0.046,0.025,0.069,0.081,0.082,0.115,0.037,0.124,0.08,0.146,0.116,0.833,1,0.068,0.225,0,0,-0.01,0.004,0.014,-0.005,0.043,0.024,0.031,0.062,0.054,0.048,0.067,0.096,0.076,0.078,0.056,0.058,0.083,0.11,0.099,0.068,-0.031,0.091,0.077,0.103,0.143,0.065,0.13,0.117,0.169,0.418,0.063,0.068,1,0.657,0,0,0.177,0.641,0.694,0.549,0.607,0.576,0.561,0.575,0.686,0.59,0.502,0.624,0.565,0.61,0.481,0.577,0.57,0.494,0.433,0.602,-0.079,0.663,0.684,0.473,0.361,0.575,0.255,0.518,0.173,0.337,0.171,0.225,0.657,1,0,0,0.037,0.7,0.708,0.783,0.824,0.794,0.735,0.846,0.809,0.815,0.886,0.892,0.863,0.894,0.816,0.737,0.894,0.885,0.818,0.866,-0.335,0.835,0.896,0.686,0.49,0.684,0.43,0.655,0.303,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.319,-0.052,-0.01,0.177,0.037,0,0,1,-0.039,0.006,-0.05,-0.047,-0.008,0.05,-0.05,-0.015,-0.063,-0.029,0.031,-0.05,0.001,-0.024,0.038,-0.032,-0.047,-0.055,-0.063,0.46,0.171,0.076,-0.039,0.001,0.172,-0.02,0.102,-0.057,0.214,0.023,0.004,0.641,0.7,0,0,-0.039,1,0.791,0.788,0.729,0.747,0.627,0.714,0.755,0.731,0.718,0.75,0.716,0.745,0.684,0.622,0.766,0.655,0.609,0.768,-0.245,0.757,0.718,0.666,0.475,0.58,0.373,0.538,0.282,0.217,0.02,0.014,0.694,0.708,0,0,0.006,0.791,1,0.756,0.838,0.731,0.683,0.833,0.887,0.875,0.728,0.802,0.812,0.776,0.683,0.602,0.781,0.662,0.626,0.844,-0.304,0.731,0.727,0.591,0.389,0.58,0.307,0.509,0.177,0.195,-0.013,-0.005,0.549,0.783,0,0,-0.05,0.788,0.756,1,0.737,0.931,0.679,0.809,0.739,0.75,0.899,0.86,0.823,0.908,0.927,0.738,0.932,0.87,0.887,0.781,-0.354,0.751,0.773,0.682,0.397,0.608,0.329,0.575,0.217,0.207,0.04,0.043,0.607,0.824,0,0,-0.047,0.729,0.838,0.737,1,0.689,0.68,0.927,0.956,0.969,0.809,0.86,0.937,0.842,0.705,0.568,0.82,0.749,0.707,0.97,-0.404,0.696,0.767,0.543,0.349,0.542,0.247,0.458,0.184,0.224,0.01,0.024,0.576,0.794,0,0,-0.008,0.747,0.731,0.931,0.689,1,0.703,0.763,0.702,0.704,0.883,0.853,0.796,0.911,0.941,0.766,0.936,0.888,0.876,0.739,-0.318,0.77,0.769,0.73,0.445,0.64,0.393,0.634,0.241,0.313,0.027,0.031,0.561,0.735,0,0,0.05,0.627,0.683,0.679,0.68,0.703,1,0.687,0.705,0.715,0.721,0.747,0.694,0.748,0.68,0.606,0.746,0.717,0.665,0.741,-0.227,0.738,0.741,0.644,0.573,0.778,0.571,0.825,0.283,0.202,0.048,0.062,0.575,0.846,0,0,-0.05,0.714,0.833,0.809,0.927,0.763,0.687,1,0.915,0.932,0.871,0.868,0.938,0.891,0.795,0.639,0.882,0.84,0.807,0.923,-0.418,0.708,0.795,0.585,0.357,0.588,0.299,0.509,0.211,0.245,0.055,0.054,0.686,0.809,0,0,-0.015,0.755,0.887,0.739,0.956,0.702,0.705,0.915,1,0.962,0.778,0.856,0.917,0.835,0.698,0.61,0.809,0.73,0.684,0.944,-0.358,0.731,0.788,0.543,0.352,0.578,0.268,0.492,0.169,0.221,0.049,0.048,0.59,0.815,0,0,-0.063,0.731,0.875,0.75,0.969,0.704,0.715,0.932,0.962,1,0.809,0.861,0.932,0.846,0.718,0.586,0.831,0.752,0.724,0.962,-0.401,0.71,0.774,0.569,0.373,0.56,0.302,0.492,0.192,0.213,0.024,0.067,0.502,0.886,0,0,-0.029,0.718,0.728,0.899,0.809,0.883,0.721,0.871,0.778,0.809,1,0.912,0.882,0.939,0.929,0.746,0.966,0.946,0.893,0.861,-0.404,0.78,0.816,0.696,0.437,0.652,0.385,0.627,0.264,0.261,0.065,0.096,0.624,0.892,0,0,0.031,0.75,0.802,0.86,0.86,0.853,0.747,0.868,0.856,0.861,0.912,1,0.905,0.937,0.866,0.763,0.918,0.88,0.835,0.889,-0.312,0.865,0.852,0.684,0.458,0.657,0.366,0.616,0.248,0.214,0.074,0.076,0.565,0.863,0,0,-0.05,0.716,0.812,0.823,0.937,0.796,0.694,0.938,0.917,0.932,0.882,0.905,1,0.909,0.82,0.663,0.902,0.845,0.82,0.933,-0.403,0.742,0.806,0.602,0.359,0.568,0.273,0.496,0.192,0.231,0.044,0.078,0.61,0.894,0,0,0.001,0.745,0.776,0.908,0.842,0.911,0.748,0.891,0.835,0.846,0.939,0.937,0.909,1,0.93,0.774,0.967,0.944,0.908,0.877,-0.364,0.796,0.821,0.706,0.456,0.652,0.392,0.635,0.271,0.207,0.028,0.056,0.481,0.816,0,0,-0.024,0.684,0.683,0.927,0.705,0.941,0.68,0.795,0.698,0.718,0.929,0.866,0.82,0.93,1,0.785,0.954,0.944,0.918,0.762,-0.345,0.749,0.762,0.695,0.407,0.624,0.372,0.609,0.23,0.239,0.046,0.058,0.577,0.737,0,0,0.038,0.622,0.602,0.738,0.568,0.766,0.606,0.639,0.61,0.586,0.746,0.763,0.663,0.774,0.785,1,0.773,0.808,0.681,0.645,-0.139,0.765,0.744,0.62,0.408,0.604,0.361,0.587,0.247,0.239,0.053,0.083,0.57,0.894,0,0,-0.032,0.766,0.781,0.932,0.82,0.936,0.746,0.882,0.809,0.831,0.966,0.918,0.902,0.967,0.954,0.773,1,0.953,0.918,0.868,-0.403,0.801,0.833,0.734,0.455,0.673,0.403,0.645,0.26,0.219,0.05,0.11,0.494,0.885,0,0,-0.047,0.655,0.662,0.87,0.749,0.888,0.717,0.84,0.73,0.752,0.946,0.88,0.845,0.944,0.944,0.808,0.953,1,0.921,0.81,-0.391,0.754,0.811,0.694,0.442,0.659,0.416,0.652,0.286,0.178,0.071,0.099,0.433,0.818,0,0,-0.055,0.609,0.626,0.887,0.707,0.876,0.665,0.807,0.684,0.724,0.893,0.835,0.82,0.908,0.918,0.681,0.918,0.921,1,0.753,-0.397,0.697,0.76,0.656,0.401,0.585,0.375,0.589,0.263,0.211,0.046,0.068,0.602,0.866,0,0,-0.063,0.768,0.844,0.781,0.97,0.739,0.741,0.923,0.944,0.962,0.861,0.889,0.933,0.877,0.762,0.645,0.868,0.81,0.753,1,-0.42,0.75,0.813,0.609,0.412,0.594,0.334,0.543,0.233,0.255,0.025,-0.031,-0.079,-0.335,0,0,0.46,-0.245,-0.304,-0.354,-0.404,-0.318,-0.227,-0.418,-0.358,-0.401,-0.404,-0.312,-0.403,-0.364,-0.345,-0.139,-0.403,-0.391,-0.397,-0.42,1,-0.019,-0.223,-0.289,-0.175,-0.079,-0.147,-0.132,-0.158,0.433,0.069,0.091,0.663,0.835,0,0,0.171,0.757,0.731,0.751,0.696,0.77,0.738,0.708,0.731,0.71,0.78,0.865,0.742,0.796,0.749,0.765,0.801,0.754,0.697,0.75,-0.019,1,0.889,0.682,0.509,0.75,0.425,0.685,0.256,0.448,0.081,0.077,0.684,0.896,0,0,0.076,0.718,0.727,0.773,0.767,0.769,0.741,0.795,0.788,0.774,0.816,0.852,0.806,0.821,0.762,0.744,0.833,0.811,0.76,0.813,-0.223,0.889,1,0.625,0.45,0.76,0.382,0.674,0.23,0.124,0.082,0.103,0.473,0.686,0,0,-0.039,0.666,0.591,0.682,0.543,0.73,0.644,0.585,0.543,0.569,0.696,0.684,0.602,0.706,0.695,0.62,0.734,0.694,0.656,0.609,-0.289,0.682,0.625,1,0.871,0.628,0.792,0.746,0.69,0.114,0.115,0.143,0.361,0.49,0,0,0.001,0.475,0.389,0.397,0.349,0.445,0.573,0.357,0.352,0.373,0.437,0.458,0.359,0.456,0.407,0.408,0.455,0.442,0.401,0.412,-0.175,0.509,0.45,0.871,1,0.554,0.912,0.751,0.847,0.415,0.037,0.065,0.575,0.684,0,0,0.172,0.58,0.58,0.608,0.542,0.64,0.778,0.588,0.578,0.56,0.652,0.657,0.568,0.652,0.624,0.604,0.673,0.659,0.585,0.594,-0.079,0.75,0.76,0.628,0.554,1,0.547,0.866,0.342,0.114,0.124,0.13,0.255,0.43,0,0,-0.02,0.373,0.307,0.329,0.247,0.393,0.571,0.299,0.268,0.302,0.385,0.366,0.273,0.392,0.372,0.361,0.403,0.416,0.375,0.334,-0.147,0.425,0.382,0.792,0.912,0.547,1,0.754,0.788,0.31,0.08,0.117,0.518,0.655,0,0,0.102,0.538,0.509,0.575,0.458,0.634,0.825,0.509,0.492,0.492,0.627,0.616,0.496,0.635,0.609,0.587,0.645,0.652,0.589,0.543,-0.132,0.685,0.674,0.746,0.751,0.866,0.754,1,0.531,0.01,0.146,0.169,0.173,0.303,0,0,-0.057,0.282,0.177,0.217,0.184,0.241,0.283,0.211,0.169,0.192,0.264,0.248,0.192,0.271,0.23,0.247,0.26,0.286,0.263,0.233,-0.158,0.256,0.23,0.69,0.847,0.342,0.788,0.531,1],"days":250}};
+
+window.__QFA_META__ = {"asOf":"2026-11-19","builtAt":"2026-11-20T20:07:28.666Z","count":36};
+
+/**
+ * 季策引擎 · 纯函数，无 DOM 依赖
+ * 浏览器（index.html）与 Node（scripts/quarterly.mjs）共用同一套打分/配置/风控逻辑。
+ *
+ * 设计原则：
+ *  1) 只在同一个大类内比较基金，跨类不做收益比较（股 vs 债没有可比性）。
+ *  2) 打分全部基于可复核的公开指标，权重固定、可解释，不做黑箱预测。
+ *  3) 权重分配带单只上限与分散下限，避免"押注单一赛道"。
+ *  4) 组合风险用协方差矩阵估算，而不是把各基金波动简单相加。
+ */
+
+const RISK_FREE = 0.02;
+
+const BUCKETS = {
+  equity: { name: "境内权益", short: "股", color: "#0f6f5c" },
+  overseas: { name: "海外权益", short: "海", color: "#2563a8" },
+  bond: { name: "固收债券", short: "债", color: "#8a6d3b" },
+  cash: { name: "现金货币", short: "现", color: "#6b7280" },
+  alt: { name: "黄金另类", short: "金", color: "#b45309" },
+};
+
+const PROFILES = {
+  conservative: {
+    key: "conservative",
+    coreShare: 0.6,
+    name: "保守型",
+    desc: "不能接受本金明显回撤，追求跑赢活期与通胀",
+    targets: { cash: 0.28, bond: 0.55, equity: 0.07, overseas: 0.03, alt: 0.07 },
+    perBucket: { equity: 2, overseas: 1, bond: 2, cash: 1, alt: 1 },
+  },
+  steady: {
+    key: "steady",
+    coreShare: 0.55,
+    name: "稳健型",
+    desc: "能接受 5%~10% 的阶段性回撤，以稳为主、少量进攻",
+    targets: { cash: 0.15, bond: 0.4, equity: 0.27, overseas: 0.08, alt: 0.1 },
+    perBucket: { equity: 3, overseas: 2, bond: 2, cash: 1, alt: 1 },
+  },
+  balanced: {
+    key: "balanced",
+    coreShare: 0.45,
+    name: "平衡型",
+    desc: "能接受 10%~20% 回撤，股债大致均衡",
+    targets: { cash: 0.08, bond: 0.3, equity: 0.4, overseas: 0.14, alt: 0.08 },
+    perBucket: { equity: 4, overseas: 2, bond: 2, cash: 1, alt: 1 },
+  },
+  aggressive: {
+    key: "aggressive",
+    coreShare: 0.3,
+    name: "进取型",
+    desc: "能接受 20% 以上回撤，追求长期高收益",
+    targets: { cash: 0.03, bond: 0.12, equity: 0.57, overseas: 0.2, alt: 0.08 },
+    perBucket: { equity: 5, overseas: 2, bond: 1, cash: 1, alt: 1 },
+  },
+};
+
+const FACTORS = [
+  { key: "sharpe3y", label: "风险调整收益", weight: 0.3, better: "high" },
+  { key: "cagr3y", label: "近三年年化", weight: 0.15, better: "high" },
+  { key: "mdd3y", label: "最大回撤控制", weight: 0.2, better: "high" },
+  { key: "vol3y", label: "波动率", weight: 0.1, better: "low" },
+  { key: "feeRate", label: "申购费率", weight: 0.1, better: "low" },
+  { key: "r1y", label: "近一年动量", weight: 0.05, better: "high" },
+  { key: "scaleFit", label: "规模适配", weight: 0.05, better: "high" },
+  { key: "managerYears", label: "经理任职", weight: 0.05, better: "high" },
+];
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const round100 = (v) => Math.round(v / 100) * 100;
+
+function scaleFit(scale) {
+  if (!scale || scale <= 0) return 0;
+  // 20~150 亿最舒适；过小有清盘/流动性风险，过大有策略容量问题
+  const x = Math.log10(scale);
+  const ideal = Math.log10(60);
+  return clamp(1 - Math.abs(x - ideal) / 1.6, 0, 1);
+}
+
+function rawValue(fund, key) {
+  switch (key) {
+    case "scaleFit": return scaleFit(fund.scale);
+    case "managerYears": return clamp(fund.managerYears ?? 0, 0, 8);
+    case "feeRate": return fund.feeRate ?? 0.15;
+    default: return Number.isFinite(fund[key]) ? fund[key] : null;
+  }
+}
+
+const minMax = (arr) => {
+  const vals = arr.filter((v) => v !== null && Number.isFinite(v));
+  if (!vals.length) return { lo: 0, hi: 0 };
+  return { lo: Math.min(...vals), hi: Math.max(...vals) };
+};
+
+/** 同大类内打分，返回 0~100 的综合分与因子明细 */
+function scoreFunds(funds) {
+  const byBucket = new Map();
+  for (const f of funds) {
+    if (!byBucket.has(f.bucket)) byBucket.set(f.bucket, []);
+    byBucket.get(f.bucket).push(f);
+  }
+  const scored = new Map();
+
+  for (const [bucket, peers] of byBucket) {
+    const isCash = bucket === "cash";
+    const active = isCash ? [{ key: "cagr3y", weight: 1, better: "high", label: "七日年化" }] : FACTORS;
+    const ranges = {};
+    for (const fac of active) {
+      ranges[fac.key] = minMax(peers.map((f) => rawValue(f, fac.key)));
+    }
+    for (const f of peers) {
+      const factors = active.map((fac) => {
+        const raw = rawValue(f, fac.key);
+        const { lo, hi } = ranges[fac.key];
+        let s = 0.5;
+        if (raw !== null && hi > lo) {
+          s = (raw - lo) / (hi - lo);
+          if (fac.better === "low") s = 1 - s;
+        }
+        return { key: fac.key, label: fac.label, weight: fac.weight, raw, score: s };
+      });
+      const total = factors.reduce((a, x) => a + x.score * x.weight, 0) * 100;
+      scored.set(f.code, { total: Math.round(total * 10) / 10, factors });
+    }
+  }
+  return scored;
+}
+
+/** 组合风险：用 波动率 × 相关系数矩阵 估算年化波动 */
+function portfolioRisk(list, corr) {
+  // list: [{code, weight}]
+  const idx = new Map((corr?.order || []).map((c, i) => [c, i]));
+  const n = corr?.order?.length || 0;
+  let variance = 0;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    const ia = idx.get(a.code);
+    for (let j = 0; j < list.length; j++) {
+      const b = list[j];
+      const ib = idx.get(b.code);
+      let rho = 0;
+      if (ia !== undefined && ib !== undefined && n) rho = corr.matrix[ia * n + ib];
+      else if (a.code === b.code) rho = 1;
+      variance += a.weight * b.weight * (a.vol || 0) * (b.vol || 0) * rho;
+    }
+  }
+  const vol = Math.sqrt(Math.max(0, variance));
+  return {
+    vol,
+    estDrawdown: -1.55 * vol, // 经验系数：最大回撤≈1.55×年化波动，仅作量级参考
+    effN: list.reduce((a, x) => a + x.weight * x.weight, 0) > 0 ? 1 / list.reduce((a, x) => a + x.weight * x.weight, 0) : 0,
+  };
+}
+
+/**
+ * 生成季度配置
+ * @param {object} p
+ * @param {Array} p.funds     基金池（data/funds.json 的 funds）
+ * @param {object} p.corr     相关矩阵
+ * @param {string} p.risk     conservative|steady|balanced|aggressive
+ * @param {number} p.amount   计划投入总金额
+ * @param {Array}  p.holdings [{code, amount}] 当前持仓（可选）
+ */
+function buildAllocation({ funds, corr, risk = "balanced", amount = 100000, holdings = [] }) {
+  const profile = PROFILES[risk] || PROFILES.balanced;
+  const scores = scoreFunds(funds);
+  const byBucket = new Map();
+  for (const f of funds) {
+    if (!byBucket.has(f.bucket)) byBucket.set(f.bucket, []);
+    byBucket.get(f.bucket).push({ ...f, score: scores.get(f.code)?.total ?? 0, factors: scores.get(f.code)?.factors || [] });
+  }
+  for (const arr of byBucket.values()) arr.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code));
+
+  // 目标权重：池子里没有的大类，权重按比例转给有货的大类
+  const weights = { ...profile.targets };
+  const missing = Object.keys(weights).filter((b) => !(byBucket.get(b)?.length));
+  if (missing.length) {
+    const lost = missing.reduce((a, b) => a + weights[b], 0);
+    missing.forEach((b) => (weights[b] = 0));
+    const rest = Object.keys(weights).filter((b) => weights[b] > 0);
+    const restSum = rest.reduce((a, b) => a + weights[b], 0) || 1;
+    rest.forEach((b) => (weights[b] += (lost * weights[b]) / restSum));
+  }
+
+  const softmaxSplit = (chosen, target, k, temp) => {
+    if (!chosen.length) return [];
+    const maxS = Math.max(...chosen.map((f) => f.score));
+    let ws = chosen.map((f) => Math.exp((f.score - maxS) / temp));
+    ws = ws.map((w) => w / ws.reduce((a, b) => a + b, 0));
+    // 单只上限 35%，迭代归一
+    for (let iter = 0; iter < 8; iter++) {
+      const cap = k === 1 ? 1 : 0.35;
+      ws = ws.map((w) => Math.min(w, cap));
+      const sum = ws.reduce((a, b) => a + b, 0) || 1;
+      ws = ws.map((w) => w / sum);
+    }
+    return chosen.map((f, i) => ({ ...f, weight: ws[i] * target }));
+  };
+
+  const picks = [];
+  for (const [bucket, pool] of byBucket) {
+    const target = weights[bucket] || 0;
+    if (target <= 0 || !pool.length) continue;
+    const k = Math.min(profile.perBucket[bucket] || 2, pool.length);
+    const temp = bucket === "cash" ? 3 : 7;
+
+    let allocated = [];
+    const corePool = bucket === "equity" ? pool.filter((f) => f.tag === "core") : [];
+    if (corePool.length >= 1 && profile.coreShare > 0 && pool.length > corePool.length) {
+      // 核心-卫星：宽基打底，主动/主题做卫星，避免集中押注单一赛道
+      const coreK = Math.min(2, corePool.length, k);
+      const satK = Math.max(1, k - coreK);
+      const coreW = target * profile.coreShare;
+      allocated = [
+        ...softmaxSplit(corePool.slice(0, coreK), coreW, coreK, temp),
+        ...softmaxSplit(pool.filter((f) => f.tag !== "core").slice(0, satK), target - coreW, satK, temp),
+      ];
+    } else {
+      allocated = softmaxSplit(pool.slice(0, k), target, k, temp);
+    }
+
+    for (const f of allocated) {
+      picks.push({
+        code: f.code, name: f.name, bucket, score: f.score, factors: f.factors,
+        weight: f.weight, vol: f.vol3y, mdd: f.mdd3y, cagr: f.cagr3y,
+        sharpe: f.sharpe3y, scale: f.scale, fee: f.feeRate, tag: f.tag || null,
+      });
+    }
+  }
+
+  // 去掉权重过小的碎仓（<1.5%），再归一，避免"每只买 800 元"式噪音
+  const minWeight = amount < 20000 ? 0.06 : 0.015;
+  let kept = picks.filter((p) => p.weight >= minWeight);
+  const renorm = (arr) => {
+    const s = arr.reduce((a, p) => a + p.weight, 0) || 1;
+    arr.forEach((p) => (p.weight = p.weight / s));
+  };
+  renorm(kept);
+
+  // 金额较小时，买不起的仓位直接砍掉（基金单笔常见门槛 10~100 元），
+  // 否则会出现「目标 300 元 / 占比 0.0% / 买入」这种自相矛盾的行。
+  const MIN_TICKET = 100;
+  for (let iter = 0; iter < 8; iter++) {
+    if (kept.length <= 1) break;
+    const affordable = kept.filter((p) => p.weight * amount >= MIN_TICKET);
+    if (affordable.length === kept.length) break;
+    kept = affordable.length ? affordable : [kept.reduce((a, b) => (b.weight > a.weight ? b : a))];
+    renorm(kept);
+  }
+  picks.length = 0;
+  picks.push(...kept);
+
+  // 金额取整到 100 元，并把误差补到最大的一笔
+  for (const p of picks) p.amount = Math.max(MIN_TICKET, round100(p.weight * amount));
+  if (picks.length) {
+    let diff = amount - picks.reduce((a, p) => a + p.amount, 0);
+    const biggest = picks.reduce((a, b) => (b.amount > a.amount ? b : a));
+    biggest.amount += diff;
+    // 极端小额（< 最小申购额）时全部给一只
+    if (biggest.amount < MIN_TICKET) {
+      picks.length = 0;
+      picks.push({ ...kept[0], amount });
+    }
+  }
+
+  const total = picks.reduce((a, p) => a + p.amount, 0) || 1;
+  for (const p of picks) {
+    p.weight = p.amount / total;
+    p.current = holdings.find((h) => h.code === p.code)?.amount || 0;
+    p.delta = p.amount - p.current;
+    p.action = actionOf(p, amount);
+  }
+
+  // 已持有但本期不再入选的基金 → 建议清仓
+  for (const h of holdings) {
+    if (!h.amount) continue;
+    if (picks.some((p) => p.code === h.code)) continue;
+    const f = funds.find((x) => x.code === h.code);
+    picks.push({
+      code: h.code,
+      name: f?.name || h.code,
+      bucket: f?.bucket || "equity",
+      score: scores.get(h.code)?.total ?? 0,
+      factors: scores.get(h.code)?.factors || [],
+      weight: 0,
+      vol: f?.vol3y || 0,
+      mdd: f?.mdd3y || 0,
+      cagr: f?.cagr3y || 0,
+      sharpe: f?.sharpe3y || 0,
+      scale: f?.scale ?? null,
+      fee: f?.feeRate ?? null,
+      amount: 0,
+      current: h.amount,
+      delta: -h.amount,
+      action: { key: "sell-all", label: "清仓", tone: "sell", note: "本期打分未进入配置" },
+    });
+  }
+
+  picks.sort((a, b) => b.amount - a.amount);
+
+  const riskInfo = portfolioRisk(
+    picks.filter((p) => p.amount > 0).map((p) => ({ code: p.code, weight: p.weight, vol: p.vol })),
+    corr
+  );
+
+  const bucketMix = {};
+  for (const p of picks) bucketMix[p.bucket] = (bucketMix[p.bucket] || 0) + p.weight;
+
+  const currentTotal = holdings.reduce((a, h) => a + h.amount, 0);
+  const turnover = currentTotal > 0
+    ? picks.reduce((a, p) => a + Math.abs(p.delta), 0) / 2 / Math.max(amount, currentTotal)
+    : 1;
+
+  return {
+    risk: profile.key,
+    profile,
+    amount,
+    picks,
+    bucketMix,
+    riskInfo,
+    turnover,
+    currentTotal,
+    avgScore: picks.filter((p) => p.amount > 0).reduce((a, p) => a + p.score * p.weight, 0),
+    notes: buildNotes({ picks, bucketMix, riskInfo, profile }),
+  };
+}
+
+function actionOf(p, total = 100000) {
+  const minTrade = Math.max(100, Math.round(total * 0.004));
+  if (p.amount === 0 && p.current > 0) return { key: "sell-all", label: "清仓", tone: "sell", note: "移出配置" };
+  if (p.current === 0) return { key: "buy", label: "买入", tone: "buy", note: "新建仓位" };
+  const ratio = p.delta / p.current;
+  if (p.delta > minTrade && ratio > 0.15) return { key: "add", label: "加仓", tone: "buy", note: `占比提升至 ${(p.weight * 100).toFixed(1)}%` };
+  if (p.delta < -minTrade && ratio < -0.15) return { key: "trim", label: "减仓", tone: "sell", note: `占比降至 ${(p.weight * 100).toFixed(1)}%` };
+  return { key: "hold", label: "持有", tone: "hold", note: "偏离在阈值内" };
+}
+
+function buildNotes({ picks, bucketMix, riskInfo, profile }) {
+  const notes = [];
+  const eq = (bucketMix.equity || 0) + (bucketMix.overseas || 0);
+  notes.push(`权益类合计 ${(eq * 100).toFixed(0)}%，固收 ${((bucketMix.bond || 0) * 100).toFixed(0)}%，现金 ${((bucketMix.cash || 0) * 100).toFixed(0)}%。`);
+  const top = picks.filter((p) => p.amount > 0).sort((a, b) => b.weight - a.weight)[0];
+  if (top) notes.push(`第一大持仓 ${top.name} 占 ${(top.weight * 100).toFixed(0)}%，单只已做上限约束。`);
+  if (riskInfo.vol > 0.22) notes.push(`组合估算年化波动 ${(riskInfo.vol * 100).toFixed(1)}%，偏高；若回撤超出承受范围请下调风险档。`);
+  else notes.push(`组合估算年化波动 ${(riskInfo.vol * 100).toFixed(1)}%，与「${profile.name}」匹配度较好。`);
+  if (riskInfo.effN < 4) notes.push(`分散度偏低（有效持仓数 ${riskInfo.effN.toFixed(1)}），建议关注相关性。`);
+  return notes;
+}
+
+/* ---------------- 季度窗口 ---------------- */
+
+function quarterOf(date = new Date()) {
+  const d = new Date(date);
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return { key: `${d.getFullYear()}Q${q}`, year: d.getFullYear(), q };
+}
+
+const HOLIDAYS = new Set(["01-01", "10-01", "10-02", "10-03", "05-01"]);
+function firstWeekdayOf(year, month) {
+  const d = new Date(year, month, 1);
+  const key = (x) => `${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  while (d.getDay() === 0 || d.getDay() === 6 || HOLIDAYS.has(key(d))) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function nextQuarterStart(date = new Date()) {
+  const d = new Date(date);
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  const y = d.getFullYear();
+  if (q === 4) return firstWeekdayOf(y + 1, 0);
+  return firstWeekdayOf(y, q * 3);
+}
+
+function daysUntil(target, from = new Date()) {
+  const a = new Date(from); a.setHours(0, 0, 0, 0);
+  const b = new Date(target); b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+}
+
+/** 当前是否处于「可生成新报告」的窗口：本季度还没有报告即可生成 */
+function canGenerate(currentKey, reports) {
+  return !reports.some((r) => r.quarter === currentKey);
+}
+
+/* ---------------- 卖出与持有期 ---------------- */
+
+// 场外基金常见的赎回费阶梯（占赎回金额比例），仅作估算，以基金合同为准
+const FEE_TIERS = {
+  equity: [[7, 0.015], [30, 0.0075], [365, 0.005], [730, 0.0025], [Infinity, 0]],
+  overseas: [[7, 0.015], [30, 0.0075], [365, 0.005], [730, 0.0025], [Infinity, 0]],
+  alt: [[7, 0.015], [30, 0.0075], [365, 0.005], [730, 0.0025], [Infinity, 0]],
+  bond: [[7, 0.015], [30, 0.001], [Infinity, 0]],
+  cash: [[Infinity, 0]],
+};
+
+function feeTier(days, bucket) {
+  const tiers = FEE_TIERS[bucket] || FEE_TIERS.equity;
+  for (const [limit, rate] of tiers) {
+    if (days < limit) {
+      const next = tiers.find(([d]) => d > limit);
+      return { rate, limit, nextLimit: next ? next[0] : Infinity, nextRate: next ? next[1] : 0 };
+    }
+  }
+  return { rate: 0, limit: Infinity, nextLimit: Infinity, nextRate: 0 };
+}
+
+const addDays = (d, n) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+};
+
+function nextTradingDay(date) {
+  const d = new Date(date);
+  const HOL = new Set(["01-01", "10-01", "10-02", "10-03", "05-01"]);
+  const key = (x) => `${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  while (d.getDay() === 0 || d.getDay() === 6 || HOL.has(key(d))) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/**
+ * 卖出计划：什么时候卖、卖多少、赎回费多少、要不要为费率再等等
+ * @param {object} p
+ * @param {Array}  p.picks     本期配置（含 current / delta / amount）
+ * @param {Array}  p.holdings  当前持仓（可带 since：买入日期）
+ * @param {Date}   p.createdAt 报告生成时间
+ */
+function buildSellPlan({ picks, holdings = [], createdAt = new Date() }) {
+  const today = new Date(createdAt);
+  today.setHours(0, 0, 0, 0);
+  const rows = [];
+
+  for (const p of picks) {
+    const sell = -p.delta;
+    if (sell <= 0) continue;
+    const hold = holdings.find((h) => h.code === p.code);
+    const since = hold?.since ? new Date(hold.since) : null;
+    const days = since && !Number.isNaN(since.getTime()) ? Math.floor((today - since) / 86400000) : null;
+    const tier = feeTier(days == null ? 30 : Math.max(0, days), p.bucket);
+    const feeRate = tier.rate;
+    const fee = Math.round(sell * feeRate);
+
+    let earliest = today;
+    let window;
+    if (days == null) {
+      earliest = nextTradingDay(addDays(today, 1));
+      window = "报告期内 1~3 个交易日（交易日 15:00 前提交）";
+    } else if (days < 7) {
+      earliest = nextTradingDay(addDays(since, 7));
+      window = `等到 ${fmtDate(earliest)}（持有满 7 天）之后的首个交易日再提交，否则按 1.5% 收惩罚性赎回费`;
+    } else {
+      earliest = nextTradingDay(addDays(today, 1));
+      window = `${fmtDate(earliest)} 起 3 个交易日内，15:00 前提交（15:00 后按下一交易日净值）`;
+    }
+
+    // 差几天就能降档时，提示等一下更划算
+    let waitHint = null;
+    if (days != null && tier.nextLimit !== Infinity && tier.nextLimit - days <= 10 && tier.nextRate < feeRate) {
+      waitHint = `再持有 ${Math.ceil(tier.nextLimit - days)} 天，赎回费率从 ${(feeRate * 100).toFixed(2)}% 降到 ${(tier.nextRate * 100).toFixed(2)}%，可省约 ${Math.round(sell * (feeRate - tier.nextRate))} 元`;
+      const waitDate = nextTradingDay(addDays(since, Math.ceil(tier.nextLimit - days)));
+      if (waitDate < earliest) earliest = waitDate;
+    }
+
+    rows.push({
+      code: p.code,
+      name: p.name,
+      bucket: p.bucket,
+      amount: Math.round(sell),
+      targetWeight: p.weight,
+      holdingDays: days,
+      feeRate,
+      fee,
+      earliest: fmtDate(earliest),
+      window,
+      waitHint,
+      reason: p.amount === 0 ? "本期未入选，建议清仓" : "超出本期目标权重，减回目标",
+    });
+  }
+
+  rows.sort((a, b) => b.amount - a.amount);
+  return {
+    rows,
+    total: rows.reduce((a, r) => a + r.amount, 0),
+    feeTotal: rows.reduce((a, r) => a + r.fee, 0),
+    checks: [
+      "先看持有天数：不满 7 天卖出，多数基金收 1.5% 惩罚性赎回费，通常等满 7 天再卖更划算。",
+      "交易日 15:00 前提交按当日净值确认，15:00 之后顺延到下一交易日。",
+      "季度调仓只在换季那几天做，平时不因为短期涨跌卖；被剔除的基金一次卖完，减仓的分 1~2 笔。",
+    ],
+  };
+}
+
+/**
+ * 换仓建议：本周该卖的那只 → 直接给出去哪一只。
+ * 只处理「清仓」类（跌出本期配置），减仓属于控制权重，不需要替补。
+ */
+function proposeSwaps({ funds, corr, risk = "balanced", amount = 100000, holdings = [] }) {
+  if (!holdings.length) return { rows: [], total: 0 };
+  const alloc = buildAllocation({ funds, corr, risk, amount, holdings });
+  const scores = scoreFunds(funds);
+  const held = new Set(holdings.map((h) => h.code));
+  const picked = new Map(alloc.picks.map((p) => [p.code, p]));
+  const withScore = (f) => ({ ...f, score: scores.get(f.code)?.total ?? 0 });
+
+  const rows = [];
+  for (const p of alloc.picks) {
+    if (p.amount > 0 || p.current <= 0) continue; // 只看清仓
+    const money = p.current;
+
+    // 1) 同类别里、没持有、本期也没配置的，打分最高的那只
+    let cands = funds
+      .filter((f) => f.bucket === p.bucket && !held.has(f.code) && !picked.has(f.code))
+      .map(withScore)
+      .sort((a, b) => b.score - a.score);
+
+    // 2) 没有可用的，就并入本期同类别正在加仓的那只
+    if (!cands.length) {
+      const buying = alloc.picks
+        .filter((x) => x.bucket === p.bucket && x.delta > 0)
+        .sort((a, b) => b.delta - a.delta)[0];
+      if (buying) {
+        rows.push({
+          sell: { code: p.code, name: p.name, amount: Math.round(money), score: p.score },
+          buy: { code: buying.code, name: buying.name, score: buying.score, bucket: buying.bucket },
+          amount: Math.round(money),
+          merge: true,
+          why: "同类别已有加仓标的，这笔钱直接并入",
+        });
+        continue;
+      }
+      // 3) 该类别清空时，退到固收
+      cands = funds
+        .filter((f) => f.bucket === "bond" && !held.has(f.code))
+        .map(withScore)
+        .sort((a, b) => b.score - a.score);
+    }
+
+    const buy = cands[0];
+    if (!buy) continue;
+    rows.push({
+      sell: { code: p.code, name: p.name, amount: Math.round(money), score: p.score },
+      buy: { code: buy.code, name: buy.name, score: buy.score, bucket: buy.bucket },
+      amount: Math.round(money),
+      merge: false,
+      why: `${BUCKETS[buy.bucket]?.name || buy.bucket}里未持有、本期未配置的最高分（${buy.score.toFixed(1)} 分）`,
+    });
+  }
+
+  // 同一只替补被推荐两次时合并成一笔，避免「卖两只、买同一只」出现两行
+  const merged = new Map();
+  for (const r of rows) {
+    const key = r.buy.code;
+    if (merged.has(key)) {
+      const m = merged.get(key);
+      m.amount += r.amount;
+      m.sells.push(r.sell);
+      m.why = `同类别最高分（${m.buy.score.toFixed(1)} 分），承接 ${m.sells.length} 只被剔除的基金`;
+    } else {
+      merged.set(key, { ...r, sells: [r.sell] });
+    }
+  }
+  const out = [...merged.values()].sort((a, b) => b.amount - a.amount);
+  return { rows: out, total: out.reduce((a, r) => a + r.amount, 0) };
+}
+
+
+const LS = "qfa.v1";
+// file:// 下部分浏览器会禁用 localStorage，用内存兜底，保证页面还能用
+const memStore = {};
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return memStore[k] ?? null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { memStore[k] = v; } },
+  remove(k) { try { localStorage.removeItem(k); } catch { delete memStore[k]; } },
+};
+
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+const fmt = (n) => Number(n || 0).toLocaleString("zh-CN", { maximumFractionDigits: 0 });
+const pct = (x, d = 1) => `${(Number(x || 0) * 100).toFixed(d)}%`;
+const signed = (n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmt(Math.abs(n))}`;
+const dateCN = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const timeCN = (iso) => {
+  const d = new Date(iso);
+  return `${dateCN(d)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+const PROFILE_ORDER = ["conservative", "steady", "balanced", "aggressive"];
+const BUCKET_ORDER = ["equity", "overseas", "bond", "cash", "alt"];
+
+let DATA = null;
+let SCORES = new Map();
+let state = loadState();
+const OFFLINE = !/^https?:$/.test(location.protocol);
+const offlineHint = () => toast("单文件版不能自动刷新/盯盘：请在项目目录运行 npm run refresh / npm run watch");
+
+const ui = { view: "plan", bucket: "all", q: "", sort: { key: "score", dir: "desc" }, preview: null, alerts: null };
+
+/* ---------------- 状态 ---------------- */
+
+function loadState() {
+  const base = { amount: 100000, risk: "balanced", holdings: [], reports: [] };
+  try {
+    const raw = JSON.parse(store.get(LS) || "null");
+    if (!raw) return base;
+    return {
+      amount: Number(raw.amount) || base.amount,
+      risk: PROFILES[raw.risk] ? raw.risk : base.risk,
+      holdings: Array.isArray(raw.holdings) ? raw.holdings.filter((h) => h.code) : [],
+      reports: Array.isArray(raw.reports) ? raw.reports : [],
+    };
+  } catch {
+    return base;
+  }
+}
+let syncTimer = null;
+const saveState = () => {
+  store.set(LS, JSON.stringify(state));
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncState, 700);
+};
+async function syncState() {
+  try {
+    await fetch("/api/state", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ risk: state.risk, amount: state.amount, holdings: state.holdings }),
+    });
+  } catch {
+    /* 离线打开时忽略 */
+  }
+}
+
+const currentQuarter = () => quarterOf(new Date());
+const reportOf = (key) => state.reports.find((r) => r.quarter === key) || null;
+
+/* ---------------- 启动 ---------------- */
+
+async function boot() {
+  try {
+    if (window.__QFA_DATA__) {
+      DATA = window.__QFA_DATA__;
+    } else {
+      const res = await fetch("data/funds.json", { cache: "no-cache" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      DATA = await res.json();
+    }
+  } catch (e) {
+    $("#planMain").innerHTML = `<div class="card"><div class="empty">
+      <div class="big">数据没有加载成功</div>
+      <div class="sub">浏览器直接双击打开 index.html 时，本地文件读取会被安全策略拦截。请在项目目录执行 <code>npm start</code>，然后访问 http://localhost:4173 。<br/>错误：${esc(e.message)}</div>
+    </div></div>`;
+    return;
+  }
+  SCORES = scoreFunds(DATA.funds);
+
+  // 分享/演示用参数：?risk=balanced&amount=200000&demo=1
+  const params = new URLSearchParams(location.search);
+  if (params.get("reset") === "1") {
+    store.remove(LS);
+    state = loadState();
+  }
+  const rk = params.get("risk");
+  if (rk && PROFILES[rk]) state.risk = rk;
+  const amt = Number(params.get("amount"));
+  if (amt > 0) state.amount = amt;
+  const holdParam = params.get("hold");
+  if (holdParam) {
+    state.holdings = holdParam.split(",").filter(Boolean).map((seg) => {
+      const [code, value, since] = seg.split(":");
+      return { code, amount: Number(value) || 0, since: since || undefined };
+    }).filter((h) => h.code);
+  }
+  if (rk || amt > 0 || holdParam) saveState();
+
+  // 读取每日盯盘结果（后台脚本写的 data/alerts.json）
+  try {
+    const r = await fetch("/api/alerts", { cache: "no-store" });
+    ui.alerts = r.ok ? await r.json() : null;
+  } catch {
+    ui.alerts = null;
+  }
+  applyAutoActions();
+  syncState();
+
+  renderTopbar();
+  render();
+  const v = params.get("view");
+  if (v && ["plan", "pool", "history", "method"].includes(v)) {
+    ui.view = v;
+    render();
+  }
+  const focus = params.get("focus");
+  if (focus) {
+    const id = focus === "swap" ? "swapCard" : focus === "main" ? "planMain" : focus === "plain" ? "plainBox" : focus;
+    setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 450);
+  }
+  if (params.get("demo") === "1" && !reportOf(currentQuarter().key)) {
+    generate({ preview: params.get("save") !== "1" });
+  }
+  autoWatchIfStale();
+}
+
+/* ---------------- 顶栏 ---------------- */
+
+function renderTopbar() {
+  const q = currentQuarter();
+  const next = nextQuarterStart();
+  const days = daysUntil(next);
+  $("#chipQuarter").textContent = `${q.year} 年 第 ${q.q} 季度`;
+  const chipNext = $("#chipNext");
+  chipNext.className = "chip" + (days <= 14 ? " warn" : "");
+  chipNext.textContent = `下次推荐 ${dateCN(next)} · ${days} 天后`;
+  const age = dataAgeDays();
+  const chipData = $("#chipData");
+  chipData.className = "chip" + (age >= 2 ? " warn" : "");
+  chipData.textContent = age <= 0 ? `净值 ${DATA.asOf} · 今天` : `净值 ${DATA.asOf} · ${age} 天前`;
+}
+
+function dataAgeDays() {
+  const asOf = new Date(`${DATA.asOf}T00:00:00`);
+  return Math.max(0, Math.round((Date.now() - asOf.getTime()) / 86400000));
+}
+
+/* ---------------- 路由 ---------------- */
+
+function render() {
+  $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === ui.view));
+  $$(".view").forEach((v) => v.classList.toggle("on", v.id === `view-${ui.view}`));
+  if (ui.view === "plan") renderPlan();
+  if (ui.view === "pool") renderPool();
+  if (ui.view === "history") renderHistory();
+  if (ui.view === "method") renderMethod();
+}
+
+/* ---------------- 本季推荐 ---------------- */
+
+function renderPlan() {
+  renderSide();
+  const q = currentQuarter();
+  const report = reportOf(q.key);
+  const main = $("#planMain");
+
+  if (ui.preview) { paintReport(main, ui.preview, { preview: true }); insertSwapCard(main); insertAlertCard(main); insertStaleBanner(main); return; }
+  if (report) { paintReport(main, report, {}); insertSwapCard(main); insertAlertCard(main); insertStaleBanner(main); return; }
+
+  const next = nextQuarterStart();
+  main.innerHTML = `
+    <div class="card">
+      <div class="welcome">
+        <h2>三步得到一份基金配置</h2>
+        <p class="welcome-sub">不用懂基金。填个金额、说能接受亏多少，剩下的它算。</p>
+        <div class="steps">
+          <div class="step"><i>1</i><div><b>填金额</b><span>准备投多少，1,000 元也能开始</span></div></div>
+          <div class="step"><i>2</i><div><b>选风险</b><span>亏 5%、10%、20% 哪个你受得了</span></div></div>
+          <div class="step"><i>3</i><div><b>照着买</b><span>买哪几只、各买多少、要不要卖</span></div></div>
+        </div>
+        <div class="quick-amt">
+          <span>试试这些金额：</span>
+          ${[1000, 5000, 10000, 50000, 100000]
+            .map((a) => `<button data-amt="${a}" class="${state.amount === a ? "on" : ""}">${a >= 10000 ? a / 10000 + " 万" : a / 1000 + " 千"}</button>`)
+            .join("")}
+        </div>
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn" style="width:auto;padding:10px 22px" id="genInline">生成本季度推荐</button>
+          <button class="btn ghost" id="previewInline">先看一版预览</button>
+        </div>
+        <p class="welcome-note">每季度只出一份正式建议，生成后锁定到 ${dateCN(next)}；季度内只在「该换基金」时提示。</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>四档风险对应的大类配比 <span class="hint">来自内置模型，可在上方（手机）或左侧切换</span></h3>
+      ${PROFILE_ORDER.map((k) => {
+        const p = PROFILES[k];
+        return `<div style="display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;margin:8px 0">
+          <b style="font-size:12.5px">${p.name}</b>
+          <div class="mixbar" style="margin:0;height:18px">${mixSegments(p.targets, false)}</div>
+        </div>`;
+      }).join("")}
+      <div class="mixlegend" style="margin-top:12px">
+        ${BUCKET_ORDER.map((b) => `<span><i style="background:${BUCKETS[b].color}"></i>${BUCKETS[b].name}</span>`).join("")}
+      </div>
+    </div>`;
+  insertSwapCard(main);
+  insertAlertCard(main);
+  insertStaleBanner(main);
+  $$("[data-amt]").forEach((b) =>
+    b.addEventListener("click", () => {
+      state.amount = Number(b.dataset.amt);
+      saveState();
+      renderPlan();
+    })
+  );
+  $("#genInline")?.addEventListener("click", () => generate());
+  $("#previewInline")?.addEventListener("click", () => generate({ preview: true }));
+}
+
+// 后台每天自动卖出的基金，同步到本地持仓（幂等：本地已没有这只就跳过）
+const SEEN_KEY = "qfa.seenActions";
+function seenActions() {
+  try { return new Set(JSON.parse(store.get(SEEN_KEY) || "[]")); } catch { return new Set(); }
+}
+function markSeen(set) {
+  store.set(SEEN_KEY, JSON.stringify([...set].slice(-80)));
+}
+
+function applyAutoActions() {
+  const actions = ui.alerts?.actions || [];
+  if (!actions.length) return;
+  const seen = seenActions();
+  let touched = 0;
+  for (const a of actions) {
+    if (seen.has(a.id)) continue;
+    seen.add(a.id);
+    const local = state.holdings.some((h) => h.code === a.sold.code);
+    if (!local) continue; // 后台已经改过，或本来就没持有
+    state.holdings = state.holdings.filter((h) => h.code !== a.sold.code);
+    const ex = state.holdings.find((h) => h.code === a.bought.code);
+    if (ex) ex.amount += a.bought.amount;
+    else state.holdings.push({ code: a.bought.code, amount: a.bought.amount, since: a.at.slice(0, 10) });
+    touched++;
+  }
+  markSeen(seen);
+  if (touched) {
+    saveState();
+    toast(`后台已自动换仓 ${touched} 笔，持仓已同步`);
+  }
+}
+
+// 打开页面时如果盯盘结果超过 12 小时，后台补跑一次（服务重启后也能自愈）
+async function autoWatchIfStale() {
+  if (OFFLINE || !state.holdings.length) return;
+  const ts = ui.alerts?.generatedAt ? new Date(ui.alerts.generatedAt).getTime() : 0;
+  if (Date.now() - ts < 12 * 3600e3) return;
+  try {
+    await fetch("/api/watch", { method: "POST" });
+  } catch {
+    return;
+  }
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const st = await (await fetch("/api/status", { cache: "no-store" })).json();
+    if (!st.watch?.running) break;
+  }
+  try {
+    const a = await (await fetch("/api/alerts", { cache: "no-store" })).json();
+    if (a.items?.length) {
+      ui.alerts = a;
+      renderPlan();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function checkNow() {
+  if (OFFLINE) return offlineHint();
+  const btn = $("#checkNow");
+  if (btn) { btn.disabled = true; btn.textContent = "检查中…"; }
+  try {
+    await fetch("/api/watch", { method: "POST" });
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const st = await (await fetch("/api/status", { cache: "no-store" })).json();
+      if (!st.watch?.running) {
+        const alerts = await (await fetch("/api/alerts", { cache: "no-store" })).json();
+        ui.alerts = alerts;
+        renderPlan();
+        toast(alerts.items?.length ? `发现 ${alerts.items.length} 只需要处理` : "检查完成，持仓暂时没有走坏");
+        return;
+      }
+    }
+    toast("检查超时，稍后再试");
+  } catch (e) {
+    toast("检查失败：" + e.message);
+  } finally {
+    const b = $("#checkNow");
+    if (b) { b.disabled = false; b.textContent = "检查持仓（每日盯盘）"; }
+  }
+}
+
+function undoneIds() {
+  try { return new Set(JSON.parse(store.get("qfa.undone") || "[]")); } catch { return new Set(); }
+}
+
+function insertAlertCard(root) {
+  const a = ui.alerts;
+  if (!a?.items?.length) return;
+  const undone = undoneIds();
+  const recent = (a.actions || [])
+    .filter((x) => Date.now() - new Date(x.at).getTime() < 7 * 864e5)
+    .slice(-5)
+    .reverse();
+  const pending = a.items.filter((i) => !i.executed);
+  const done = a.items.filter((i) => i.executed);
+  if (!pending.length && !recent.length) return;
+
+  const high = pending.filter((x) => x.level === "high");
+  root.insertAdjacentHTML(
+    "afterbegin",
+    `<div class="card alert-card" id="alertCard">
+      <h3>卖出提醒
+        <span class="hint">每日 08:30 自动盯盘 · ${a.generatedAt ? timeCN(a.generatedAt) : ""} · 检查了 ${a.checked} 只</span>
+      </h3>
+      <p class="swap-lead">走坏的基金会自动卖出，并等额换到同类里打分更高的那只；下面留了记录，可以撤销。</p>
+
+      ${recent.length ? `<div class="auto-box">
+        <div class="auto-title">已自动换仓 ${recent.filter((x) => !undone.has(x.id)).length} 笔</div>
+        ${recent.map((x) => `<div class="auto-row ${undone.has(x.id) ? "undone" : ""}">
+          <span class="auto-time">${timeCN(x.at)}</span>
+          <span class="auto-body">卖出 <b>${esc(x.sold.code)}</b> ${fmt(x.sold.amount)} 元 → 买入 <b>${esc(x.bought.name)}</b>
+            <span class="fcode">${x.scoreFrom} → ${x.scoreTo} 分</span></span>
+          ${undone.has(x.id)
+            ? `<span class="fcode">已撤销</span>`
+            : `<button class="link-btn" data-undo="${x.id}">撤销</button>`}
+        </div>`).join("")}
+      </div>` : ""}
+
+      ${pending.length
+        ? pending.map((it) => `
+        <div class="alert-row">
+          <div class="alert-head">
+            <span class="badge ${it.level === "high" ? "red" : "amber"}">${it.level === "high" ? "建议卖出" : "观察"}</span>
+            <b>${esc(it.name)}</b>
+            <span class="fcode">${esc(it.code)} · ${fmt(it.amount)} 元 · 综合分 ${it.score ?? "—"}</span>
+          </div>
+          <ul class="alert-hits">${it.hits.map((h) => `<li>${esc(h.text)}</li>`).join("")}</ul>
+          ${it.replacement
+            ? `<div class="alert-swap">→ 可以换到 <b>${esc(it.replacement.name)}</b>（${it.replacement.score} 分，高 ${it.replacement.gain} 分）</div>`
+            : `<div class="alert-swap muted">${esc(it.note || "同类里没有明显更好的替代，先只提示")}</div>`}
+        </div>`).join("")
+        : `<p class="hold-empty">${done.length ? "需要处理的都已自动执行，没有待人工确认的卖出。" : ""}</p>`}
+
+      <div class="btn-row" style="margin-top:12px">
+        ${high.filter((x) => x.replacement).length ? `<button class="btn" style="width:auto;padding:9px 16px" id="applyAlert">按建议换仓</button>` : ""}
+        <button class="btn ghost" id="dismissAlert">我知道了</button>
+      </div>
+      <p class="welcome-note">每天 08:00 刷新净值、08:30 检查并自动换仓；改了持仓后也会重新检查。</p>
+    </div>`
+  );
+
+  $$("[data-undo]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const act = (ui.alerts.actions || []).find((x) => x.id === btn.dataset.undo);
+      if (!act) return;
+      const b = state.holdings.find((h) => h.code === act.bought.code);
+      if (b) {
+        b.amount -= act.bought.amount;
+        if (b.amount <= 0) state.holdings = state.holdings.filter((h) => h !== b);
+      }
+      const ex = state.holdings.find((h) => h.code === act.sold.code);
+      if (ex) ex.amount += act.sold.amount;
+      else state.holdings.push({ code: act.sold.code, amount: act.sold.amount, since: act.sold.since });
+      const set = undoneIds();
+      set.add(act.id);
+      store.set("qfa.undone", JSON.stringify([...set]));
+      saveState();
+      renderPlan();
+      toast("已撤销这笔换仓");
+    })
+  );
+
+  $("#dismissAlert").addEventListener("click", () => {
+    ui.alerts = null;
+    $("#alertCard")?.remove();
+  });
+  $("#applyAlert")?.addEventListener("click", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    let moved = 0;
+    for (const it of high) {
+      if (!it.replacement) continue;
+      state.holdings = state.holdings.filter((h) => h.code !== it.code);
+      const ex = state.holdings.find((h) => h.code === it.replacement.code);
+      if (ex) ex.amount += it.amount;
+      else state.holdings.push({ code: it.replacement.code, amount: it.amount, since: today });
+      moved += it.amount;
+    }
+    saveState();
+    ui.alerts = null;
+    renderPlan();
+    toast(moved ? `已换仓 ${fmt(moved)} 元，记得点「重新生成」同步报告` : "没有可执行的换仓");
+  });
+}
+
+function insertSwapCard(root) {
+  if (!state.holdings.length || !DATA) return;
+  const swaps = proposeSwaps({
+    funds: DATA.funds, corr: DATA.corr, risk: state.risk,
+    amount: state.amount, holdings: state.holdings,
+  });
+  // 已经在「卖出提醒」里点名的基金，这里不重复列
+  const alerted = new Set((ui.alerts?.items || []).map((i) => i.code));
+  for (const r of swaps.rows) r.sells = r.sells.filter((x) => !alerted.has(x.code));
+  const rows = swaps.rows.filter((r) => r.sells.length);
+  if (!rows.length) return;
+  swaps.rows = rows;
+  swaps.total = rows.reduce((a, r) => a + r.amount, 0);
+
+  root.insertAdjacentHTML(
+    "afterbegin",
+    `<div class="card swap-card" id="swapCard">
+      <h3>本周换仓提示
+        <span class="hint">每天随净值刷新检查 · 数据 ${dataAgeDays()} 天前</span>
+      </h3>
+      <p class="swap-lead">这 ${swaps.rows.reduce((a, r) => a + r.sells.length, 0)} 只基金已跌出本期配置，建议直接卖出，并把钱换到下面这些基金。</p>
+      ${swaps.rows.map((r) => `<div class="swap-row">
+        <div class="swap-side">
+          <div class="swap-tag sell">卖出</div>
+          <div>
+            <div class="fname">${r.sells.map((x) => esc(x.name)).join("、")}</div>
+            <div class="fcode">${r.sells.map((x) => `${esc(x.code)} ${fmt(x.amount)} 元`).join(" + ")}</div>
+          </div>
+        </div>
+        <div class="swap-arrow">→</div>
+        <div class="swap-side">
+          <div class="swap-tag buy">买入</div>
+          <div>
+            <div class="fname">${esc(r.buy.name)}</div>
+            <div class="fcode">${esc(r.buy.code)} · 综合分 ${r.buy.score.toFixed(1)} · ${fmt(r.amount)} 元</div>
+          </div>
+        </div>
+      </div>`).join("")}
+      <ul class="notes"><li>${esc(swaps.rows[0].why)}；合计换仓 ${fmt(swaps.total)} 元。</li>
+      <li>按 7 天节奏检查：先提交卖出，确认到账后再买入替补，避免资金不足导致买入失败。</li></ul>
+      <div class="btn-row">
+        <button class="btn" style="width:auto;padding:9px 16px" id="applySwap">按建议换仓</button>
+        <button class="btn ghost" id="dismissSwap">稍后再说</button>
+      </div>
+    </div>`
+  );
+
+  $("#applySwap").addEventListener("click", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const r of swaps.rows) {
+      for (const s of r.sells) state.holdings = state.holdings.filter((h) => h.code !== s.code);
+      const exist = state.holdings.find((h) => h.code === r.buy.code);
+      if (exist) exist.amount += r.amount;
+      else state.holdings.push({ code: r.buy.code, amount: r.amount, since: today });
+    }
+    saveState();
+    renderPlan();
+    toast("已按建议换仓；点「重新生成」可同步报告里的差额");
+  });
+  $("#dismissSwap").addEventListener("click", () => $("#swapCard")?.remove());
+}
+
+function insertStaleBanner(root) {
+  const age = dataAgeDays();
+  if (age < 3) return;
+  root.insertAdjacentHTML(
+    "afterbegin",
+    `<div class="card" style="border-color:#f0ddc0;background:var(--warn-bg);margin-bottom:12px">
+      <div style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <div>
+          <b style="font-size:13px">净值已经 ${age} 天没更新了</b>
+          <div class="hold-empty" style="margin:4px 0 0">正常每天 08:00 自动刷新，净值本身还会滞后 1 天（周末是 2~3 天）。这么久没更新，通常是后台没跑：服务没开或断网。</div>
+        </div>
+        <button class="btn ghost" id="refreshBtn">刷新净值</button>
+      </div>
+    </div>`
+  );
+  $("#refreshBtn").addEventListener("click", refreshData);
+}
+
+async function refreshData() {
+  if (OFFLINE) return offlineHint();
+  const btn = $("#refreshBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "抓取中…（约 1 分钟）"; }
+  try {
+    const r = await fetch("/api/refresh", { method: "POST" });
+    if (!r.ok) throw new Error("服务端没有刷新接口，请在终端执行 npm run refresh");
+    for (let i = 0; i < 120; i++) {
+      await new Promise((res) => setTimeout(res, 2000));
+      const st = await (await fetch("/api/status")).json();
+      if (!st.running) {
+        if (st.ok) { toast("净值已更新，正在重新加载"); setTimeout(() => location.reload(), 600); return; }
+        throw new Error(st.message || "抓取失败");
+      }
+      if (btn) btn.textContent = `抓取中… ${Math.round((i * 2 + 2) / 60 * 100) / 100} 分钟`;
+    }
+    throw new Error("超时，请在终端执行 npm run refresh");
+  } catch (e) {
+    toast("刷新失败：" + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = "刷新净值"; }
+  }
+}
+
+function renderSide() {
+  const side = $("#side");
+  side.innerHTML = `
+    <div class="card">
+      <h3>本次配置</h3>
+      <div class="field">
+        <label>计划投入金额</label>
+        <div class="money-input">
+          <input id="amount" type="number" min="1000" step="1000" value="${state.amount}" />
+          <span class="unit">元</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>风险承受</label>
+        <div class="risk-opts">
+          ${PROFILE_ORDER.map((k) => {
+            const p = PROFILES[k];
+            return `<button class="risk-opt ${state.risk === k ? "on" : ""}" data-risk="${k}">
+              <span class="mix">
+                <span class="rk">${p.name}</span>
+                <span class="rd">${p.desc}</span>
+                <span class="bar">${mixSegments(p.targets, false)}</span>
+              </span>
+            </button>`;
+          }).join("")}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>当前持仓（可选，用于算调仓差额）</label>
+        <div class="hold-list" id="holdList"></div>
+        ${state.holdings.length < 8 ? `<button class="link-btn" id="addHold">＋ 添加一只持仓</button>` : ""}
+      </div>
+
+      <button class="btn" id="gen">
+        ${reportOf(currentQuarter().key) ? "重新生成本季度配置" : "生成本季度推荐"}
+      </button>
+      <button class="btn ghost" id="preview" style="width:100%;margin-top:8px">预览下一季度（不锁定）</button>
+      <button class="btn ghost" id="checkNow" style="width:100%;margin-top:8px">检查持仓（每日盯盘）</button>
+      <p class="hold-empty" style="margin-top:12px;line-height:1.6">
+        建议：先填「计划投入」，持仓留空也能看到一份完整的建仓方案。
+      </p>
+    </div>`;
+
+  renderHoldings();
+
+  $("#amount").addEventListener("input", (e) => {
+    state.amount = Math.max(0, Number(e.target.value) || 0);
+    saveState();
+  });
+  $("#amount").addEventListener("blur", (e) => {
+    e.target.value = state.amount;
+  });
+  $$(".risk-opt", side).forEach((b) =>
+    b.addEventListener("click", () => {
+      state.risk = b.dataset.risk;
+      saveState();
+      ui.preview = null;
+      renderPlan();
+    })
+  );
+  $("#gen").addEventListener("click", () => {
+    if (reportOf(currentQuarter().key) && !confirm("本季度已有一份正式报告，重新生成会覆盖它。继续？")) return;
+    generate();
+  });
+  $("#preview").addEventListener("click", () => generate({ preview: true }));
+  $("#checkNow").addEventListener("click", checkNow);
+  $("#addHold")?.addEventListener("click", () => {
+    const used = new Set(state.holdings.map((h) => h.code));
+    const pick = DATA.funds.find((f) => !used.has(f.code));
+    if (!pick) return;
+    state.holdings.push({ code: pick.code, amount: 0 });
+    saveState();
+    renderPlan();
+  });
+}
+
+function renderHoldings() {
+  const box = $("#holdList");
+  if (!box) return;
+  if (!state.holdings.length) {
+    box.innerHTML = `<div class="hold-empty">还没有填写持仓，按空仓建仓计算。</div>`;
+    return;
+  }
+  box.innerHTML = state.holdings
+    .map(
+      (h, i) => `<div class="hold-item">
+        <div class="hold-row">
+          <select data-hold-code="${i}">
+            ${DATA.funds
+              .map((f) => `<option value="${f.code}" ${f.code === h.code ? "selected" : ""}>${esc(f.name)}</option>`)
+              .join("")}
+          </select>
+          <input type="number" min="0" step="1000" value="${h.amount || 0}" data-hold-amount="${i}" />
+          <button data-hold-del="${i}" title="删除">×</button>
+        </div>
+        <div class="hold-meta">
+          <label for="since-${i}">买入日期</label>
+          <input type="date" id="since-${i}" data-hold-since="${i}" value="${h.since || ""}" />
+          <span>${h.since ? `持有 ${Math.max(0, Math.floor((Date.now() - new Date(h.since)) / 86400000))} 天` : "填了才能算赎回费"}</span>
+        </div>
+      </div>`
+    )
+    .join("");
+
+  $$("[data-hold-code]").forEach((el) =>
+    el.addEventListener("change", (e) => {
+      const i = Number(e.target.dataset.holdCode);
+      state.holdings[i].code = e.target.value;
+      saveState();
+      renderPlan();
+    })
+  );
+  $$("[data-hold-amount]").forEach((el) =>
+    el.addEventListener("input", (e) => {
+      const i = Number(e.target.dataset.holdAmount);
+      state.holdings[i].amount = Math.max(0, Number(e.target.value) || 0);
+      saveState();
+    })
+  );
+  $$("[data-hold-since]").forEach((el) =>
+    el.addEventListener("change", (e) => {
+      const i = Number(e.target.dataset.holdSince);
+      state.holdings[i].since = e.target.value || undefined;
+      saveState();
+      renderPlan();
+    })
+  );
+  $$("[data-hold-del]").forEach((el) =>
+    el.addEventListener("click", (e) => {
+      const i = Number(e.target.dataset.holdDel);
+      state.holdings.splice(i, 1);
+      saveState();
+      renderPlan();
+    })
+  );
+}
+
+/* ---------------- 生成 ---------------- */
+
+function generate({ preview = false } = {}) {
+  if (!DATA) return;
+  const q = currentQuarter();
+  const alloc = buildAllocation({
+    funds: DATA.funds,
+    corr: DATA.corr,
+    risk: state.risk,
+    amount: state.amount,
+    holdings: state.holdings,
+  });
+
+  const sellPlan = buildSellPlan({
+    picks: alloc.picks,
+    holdings: state.holdings,
+    createdAt: new Date(),
+  });
+
+  const swaps = proposeSwaps({
+    funds: DATA.funds, corr: DATA.corr, risk: state.risk,
+    amount: state.amount, holdings: state.holdings,
+  });
+
+  const report = {
+    id: `${q.key}-${Date.now()}`,
+    quarter: q.key,
+    createdAt: new Date().toISOString(),
+    asOf: DATA.asOf,
+    risk: state.risk,
+    amount: state.amount,
+    holdingsSnapshot: state.holdings.map((h) => ({ ...h })),
+    picks: alloc.picks.map((p) => ({
+      code: p.code, name: p.name, bucket: p.bucket, tag: p.tag,
+      weight: p.weight, amount: p.amount, current: p.current, delta: p.delta,
+      action: p.action, score: p.score, factors: p.factors,
+      vol: p.vol, mdd: p.mdd, cagr: p.cagr, sharpe: p.sharpe, scale: p.scale, fee: p.fee,
+    })),
+    bucketMix: alloc.bucketMix,
+    riskInfo: alloc.riskInfo,
+    turnover: alloc.turnover,
+    notes: alloc.notes,
+    sellPlan,
+    swaps,
+  };
+
+  if (preview) {
+    ui.preview = { ...report, preview: true };
+    toast("已生成预览，不会写入历史");
+    renderPlan();
+    if (window.innerWidth < 980) setTimeout(scrollToReport, 260);
+    return;
+  } else {
+    const idx = state.reports.findIndex((r) => r.quarter === q.key);
+    if (idx >= 0) state.reports[idx] = report;
+    else state.reports.unshift(report);
+    state.reports.sort((a, b) => b.quarter.localeCompare(a.quarter));
+    saveState();
+    ui.preview = null;
+    toast(`${q.key} 配置已生成并锁定`);
+  }
+  renderPlan();
+  // 窄屏下控件在上、报告在下，生成后直接把结果滚到眼前
+  if (window.innerWidth < 980) setTimeout(scrollToReport, 260);
+}
+
+/* ---------------- 报告渲染 ---------------- */
+
+function mixSegments(mix, showLabel = true) {
+  return BUCKET_ORDER.filter((b) => (mix[b] || 0) > 0.004)
+    .map((b) => {
+      const w = mix[b];
+      const label = showLabel && w > 0.07 ? `${BUCKETS[b].short}${(w * 100).toFixed(0)}` : "";
+      return `<div style="flex:${w};background:${BUCKETS[b].color}" title="${BUCKETS[b].name} ${(w * 100).toFixed(1)}%">${label}</div>`;
+    })
+    .join("");
+}
+
+function paintReport(root, report, { preview = false } = {}) {
+  const q = report.quarter;
+  const p = PROFILES[report.risk] || PROFILES.balanced;
+  const next = nextQuarterStart(new Date(report.createdAt));
+  const eq = (report.bucketMix.equity || 0) + (report.bucketMix.overseas || 0);
+  const buys = report.picks.filter((x) => x.action.tone === "buy");
+  const sells = report.picks.filter((x) => x.action.tone === "sell");
+
+  root.innerHTML = `
+    <div class="card">
+      <div class="report-head">
+        <div>
+          <h2 class="report-title">${q} 季度配置建议</h2>
+          <div class="report-sub">
+            ${preview ? `<span class="badge amber">预览 · 不写入历史</span>` : `<span class="badge">已锁定</span>`}
+            <span style="margin-left:8px">${p.name} · 计划投入 ${fmt(report.amount)} 元 · 净值基准 ${esc(report.asOf || DATA.asOf)}</span>
+          </div>
+        </div>
+        <div class="report-sub" style="text-align:right">
+          生成于 ${timeCN(report.createdAt)}<br/>
+          有效期至 ${dateCN(next)}
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="k">估算年化波动</div><div class="v">${pct(report.riskInfo.vol)}</div>
+          <div class="kpi-sub">一年里涨跌的幅度，通常 2/3 时间在 ±${pct(report.riskInfo.vol, 1)} 内；越大越颠</div></div>
+        <div class="kpi"><div class="k">估算最大回撤</div><div class="v">${pct(report.riskInfo.estDrawdown, 0)}</div>
+          <div class="kpi-sub">极端情况从高点跌下来，约 ${fmt(Math.abs(report.riskInfo.estDrawdown) * report.amount)} 元</div></div>
+        <div class="kpi"><div class="k">有效持仓数</div><div class="v">${report.riskInfo.effN.toFixed(1)}<small>只</small></div>
+          <div class="kpi-sub">真正起分散作用的数量，越多越不怕单只拖后腿</div></div>
+        <div class="kpi"><div class="k">季内换手</div><div class="v">${report.currentTotal ? pct(report.turnover, 0) : "新建"}</div>
+          <div class="kpi-sub">这次要动的钱占比，越低越省手续费</div></div>
+      </div>
+
+      <div style="margin-top:18px">
+        <div class="mixbar">${mixSegments(report.bucketMix)}</div>
+        <div class="mixlegend">
+          ${BUCKET_ORDER.filter((b) => (report.bucketMix[b] || 0) > 0)
+            .map((b) => `<span><i style="background:${BUCKETS[b].color}"></i>${BUCKETS[b].name} ${pct(report.bucketMix[b])}</span>`)
+            .join("")}
+          <span style="color:var(--muted)">权益合计 ${pct(eq, 0)}</span>
+        </div>
+      </div>
+
+      <div class="plainbox" id="plainBox">
+        <div class="plainbox-title">说人话</div>
+        <p>${plainConclusion(report)}</p>
+        <p class="plainbox-next">下一步：在支付宝里搜下面的 6 位代码，按金额买入。交易日 <b>15:00 前</b>下单按当天净值确认，15:00 之后算下一个交易日。</p>
+      </div>
+
+      ${preview ? `<div class="callout warn" style="margin-top:16px">这是预览，用来对比不同金额/风险档的效果。点下方「保存为本季度报告」才会锁定。</div>` : ""}
+    </div>
+
+    <div class="card">
+      <h3>目标配置与调仓清单 <span class="hint">按目标金额排序 · 点击行看打分依据</span></h3>
+      <div class="tablewrap">
+        <table class="grid" id="allocTable">
+          <thead><tr>
+            <th>基金</th><th class="c-hide-sm">类别</th><th style="text-align:right"><span class="th-long">目标占比</span><span class="th-short">占比</span></th>
+            <th style="text-align:right"><span class="th-long">目标金额</span><span class="th-short">金额</span></th><th class="c-hide-sm" style="text-align:right">当前</th>
+            <th style="text-align:right">差额</th><th>操作</th><th style="text-align:right"><span class="th-long">综合分</span><span class="th-short">分</span></th>
+          </tr></thead>
+          <tbody>
+            ${report.picks.map((x) => `
+              <tr data-code="${esc(x.code)}" style="cursor:pointer">
+                <td><div class="fname">${esc(x.name)}</div><div class="fcode">${esc(x.code)}${x.tag === "core" ? " · 核心" : ""}</div>${reasonTags(x)}</td>
+                <td class="c-hide-sm"><span class="mix-pill"><i style="width:6px;height:6px;border-radius:2px;background:${BUCKETS[x.bucket].color}"></i>${BUCKETS[x.bucket].name}</span></td>
+                <td class="num">${pct(x.weight)}</td>
+                <td class="num">${x.amount ? fmt(x.amount) : "—"}</td>
+                <td class="num c-hide-sm">${x.current ? fmt(x.current) : "—"}</td>
+                <td class="num" style="color:${x.delta > 0 ? "var(--buy)" : x.delta < 0 ? "var(--sell)" : "var(--muted)"}">${x.delta ? signed(x.delta) : "—"}</td>
+                <td class="tone-${x.action.tone}">${x.action.label}</td>
+                <td class="num">
+                  <span class="wbar"><i style="width:${Math.max(3, x.score)}%"></i></span>
+                  <span style="margin-left:6px">${x.score.toFixed(1)}</span>
+                </td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <ul class="notes">${report.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>
+    </div>
+
+    <div class="card">
+      <h3>卖出与持有期 <span class="hint">${
+        !report.sellPlan
+          ? "旧版本报告没有这项数据"
+          : report.sellPlan.rows.length
+          ? `合计卖出 ${fmt(report.sellPlan.total)} 元 · 赎回费约 ${fmt(report.sellPlan.feeTotal)} 元`
+          : "本期不需要卖出"
+      }</span></h3>
+      ${!report.sellPlan ? `<div class="empty" style="padding:22px 16px">
+        <div class="big">这份报告生成时还没有卖出计划</div>
+        <div class="sub">点上方「重新生成本季度配置」，会补上每只基金的最早可卖日与赎回费估算。</div>
+      </div>` : report.sellPlan.rows.length ? `
+      <div class="tablewrap">
+        <table class="grid" id="sellTable">
+          <thead><tr>
+            <th>基金</th><th style="text-align:right">卖出金额</th>
+            <th class="c-hide-sm" style="text-align:right">持有</th>
+            <th style="text-align:right">赎回费</th><th>最早可卖</th>
+          </tr></thead>
+          <tbody>
+            ${report.sellPlan.rows.map((r) => `<tr>
+              <td><div class="fname">${esc(r.name)}</div><div class="fcode">${esc(r.code)} · ${esc(r.reason)}</div></td>
+              <td class="num">${fmt(r.amount)}</td>
+              <td class="num c-hide-sm">${r.holdingDays == null ? "未填" : r.holdingDays + " 天"}</td>
+              <td class="num">${r.fee ? fmt(r.fee) : "—"}<div class="fcode">${(r.feeRate * 100).toFixed(2)}%</div></td>
+              <td>${esc(r.earliest)}</td>
+            </tr>
+            ${r.waitHint || r.holdingDays != null && r.holdingDays < 7
+              ? `<tr class="sell-hint"><td colspan="5">${esc(r.waitHint || r.window)}</td></tr>`
+              : ""}`).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div class="empty" style="padding:22px 16px">
+        <div class="big">本期不需要卖出</div>
+        <div class="sub">目标持仓和现有持仓的偏离都在阈值内，继续持有，等下季度再评估。</div>
+      </div>`}
+      ${report.swaps?.rows?.length ? `
+      <div class="swap-inline">
+        <div class="swap-title">换入建议 <span class="hint">卖出的钱放到同类别打分更高的基金里</span></div>
+        ${report.swaps.rows.map((r) => `<div class="swap-row">
+          <div class="swap-side">
+            <div class="swap-tag sell">卖出</div>
+            <div><div class="fname">${r.sells.map((x) => esc(x.name)).join("、")}</div>
+            <div class="fcode">${r.sells.map((x) => fmt(x.amount)).join(" + ")} 元</div></div>
+          </div>
+          <div class="swap-arrow">→</div>
+          <div class="swap-side">
+            <div class="swap-tag buy">买入</div>
+            <div><div class="fname">${esc(r.buy.name)}</div>
+            <div class="fcode">${esc(r.buy.code)} · ${r.buy.score.toFixed(1)} 分 · ${fmt(r.amount)} 元</div></div>
+          </div>
+        </div>`).join("")}
+      </div>` : ""}
+      <ul class="notes">${(report.sellPlan?.checks || []).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+    </div>
+
+    <div class="card">
+      <h3>执行要点</h3>
+      <div class="prose" style="font-size:13px">
+        <p><b>本期买入 ${buys.length} 笔，卖出 ${sells.length} 笔。</b>
+        场外基金按金额申购，建议分 2~3 个交易日下单，避开单日大涨大跌；C 类份额持有不满 7 天有 1.5% 惩罚性赎回费，短期调仓优先用 A 类长期持有。</p>
+        <p>目标占比是「占总投入」的口径：已有持仓 + 新增资金一起算，所以差额为负就是要赎回的金额。</p>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        ${preview
+          ? `<button class="btn" style="width:auto;padding:9px 16px" id="savePreview">保存为本季度报告</button>
+             <button class="btn ghost" id="discardPreview">放弃预览</button>`
+          : `<button class="btn ghost" id="exportMd">导出 Markdown</button>
+             <button class="btn ghost" id="exportIcs">日历提醒（每 3 个月）</button>
+             <button class="btn ghost" id="printReport">打印 / 存 PDF</button>
+             <button class="btn ghost" id="copySummary">复制要点</button>
+             <button class="btn ghost" id="copyOrders">复制买入清单</button>`}
+      </div>
+    </div>`;
+
+  $$("#allocTable tbody tr").forEach((tr) =>
+    tr.addEventListener("click", () => openFundDrawer(tr.dataset.code, report))
+  );
+
+  $("#savePreview")?.addEventListener("click", () => {
+    const { preview: _p, ...rest } = ui.preview;
+    const idx = state.reports.findIndex((r) => r.quarter === rest.quarter);
+    if (idx >= 0) state.reports[idx] = rest;
+    else state.reports.unshift(rest);
+    saveState();
+    ui.preview = null;
+    toast("已保存为本季度正式报告");
+    renderPlan();
+  });
+  $("#discardPreview")?.addEventListener("click", () => {
+    ui.preview = null;
+    renderPlan();
+  });
+  $("#exportMd")?.addEventListener("click", () => downloadMarkdown(report));
+  $("#exportIcs")?.addEventListener("click", () => downloadIcs(report));
+  $("#printReport")?.addEventListener("click", () => window.print());
+  $("#copySummary")?.addEventListener("click", () => copySummary(report));
+  $("#copyOrders")?.addEventListener("click", () => copyOrders(report));
+}
+
+const REASON_LABEL = {
+  mdd3y: "回撤小",
+  sharpe3y: "性价比高",
+  cagr3y: "长期收益好",
+  vol3y: "波动低",
+  feeRate: "费率低",
+  r1y: "近一年强",
+  scaleFit: "规模适中",
+  managerYears: "经理稳定",
+};
+
+function reasonTags(pick) {
+  if (!pick?.factors?.length) return "";
+  const tags = [...pick.factors]
+    .filter((f) => f.score >= 0.6)
+    .sort((a, b) => b.score * b.weight - a.score * a.weight)
+    .slice(0, 2)
+    .map((f) => REASON_LABEL[f.key] || f.label);
+  if (pick.tag === "core" && pick.bucket === "equity") tags.unshift("宽基打底");
+  if (!tags.length) return "";
+  return `<div class="reasons">${tags.slice(0, 3).map((t) => `<span>${esc(t)}</span>`).join("")}</div>`;
+}
+
+function plainConclusion(r) {
+  const p = PROFILES[r.risk] || PROFILES.balanced;
+  const buys = r.picks.filter((x) => x.amount > 0);
+  const sells = r.picks.filter((x) => x.delta < 0);
+  const parts = [];
+  parts.push(`这期用 <b>${fmt(r.amount)} 元</b>买 <b>${buys.length} 只</b>基金：`);
+  const mix = BUCKET_ORDER.filter((b) => (r.bucketMix[b] || 0) > 0.004)
+    .sort((a, b) => r.bucketMix[b] - r.bucketMix[a])
+    .map((b) => `${BUCKETS[b].name} ${pct(r.bucketMix[b], 0)}`);
+  parts.push(mix.join("、") + "。");
+
+  const dd = Math.abs(r.riskInfo.estDrawdown) * r.amount;
+  parts.push(
+    `按模型估算，一年里正常波动大约 ±${pct(r.riskInfo.vol)}；` +
+      `真遇到极端行情，浮亏可能到 ${fmt(dd)} 元左右——这就是「${p.name}」要承受的代价。`
+  );
+  if (sells.length) {
+    parts.push(`另外要卖出 ${sells.length} 只（约 ${fmt(sells.reduce((a, x) => a + Math.max(0, -x.delta), 0))} 元），具体看下面的卖出表。`);
+  } else if (!r.currentTotal) {
+    parts.push("你现在是空仓，照着下面的金额建仓就行，本期没有要卖的。");
+  } else {
+    parts.push("你的持仓和这期目标差不多，不用动。");
+  }
+  return parts.join("");
+}
+
+async function copyOrders(r) {
+  const buys = r.picks.filter((x) => x.amount > 0);
+  const sells = r.picks.filter((x) => x.delta < 0);
+  const lines = [`季策 ${r.quarter} 买入清单（合计 ${fmt(r.amount)} 元）`];
+  buys.forEach((x, i) => lines.push(`${i + 1}. ${x.name}（${x.code}） ${fmt(x.amount)} 元`));
+  if (sells.length) {
+    lines.push("", "卖出：");
+    sells.forEach((x) => lines.push(`· ${x.name}（${x.code}） ${fmt(-x.delta)} 元`));
+  }
+  lines.push("", "支付宝 → 搜索 6 位代码 → 输入金额 → 交易日 15:00 前确认。");
+  try {
+    await navigator.clipboard.writeText(lines.join("\n"));
+    toast("买入清单已复制，可直接粘到备忘录");
+  } catch {
+    toast("复制失败，请长按选择文本");
+  }
+}
+
+/* ---------------- 基金详情抽屉 ---------------- */
+
+function openFundDrawer(code, report = null) {
+  const fund = DATA.funds.find((f) => f.code === code);
+  const pick = report?.picks.find((p) => p.code === code);
+  const factors = pick?.factors || SCORES.get(code)?.factors || [];
+  const score = pick?.score ?? SCORES.get(code)?.total;
+
+  const body = $("#drawerBody");
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+      <div>
+        <h4>${esc(fund?.name || code)}</h4>
+        <div class="fcode">${esc(code)} · ${fund ? BUCKETS[fund.bucket].name : "未在池中"}${fund?.manager ? " · 经理 " + esc(fund.manager) : ""}</div>
+      </div>
+      <button class="btn ghost" id="closeDrawer" style="width:auto">关闭</button>
+    </div>
+
+    ${fund ? `
+      <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-top:14px">
+        <div class="kpi"><div class="k">近三年年化</div><div class="v" style="font-size:17px">${pct(fund.cagr3y)}</div></div>
+        <div class="kpi"><div class="k">最大回撤</div><div class="v" style="font-size:17px">${pct(fund.mdd3y)}</div></div>
+        <div class="kpi"><div class="k">年化波动</div><div class="v" style="font-size:17px">${pct(fund.vol3y)}</div></div>
+        <div class="kpi"><div class="k">夏普比率</div><div class="v" style="font-size:17px">${fund.sharpe3y.toFixed(2)}</div></div>
+        <div class="kpi"><div class="k">规模</div><div class="v" style="font-size:17px">${fund.scale ? fund.scale.toFixed(1) + "<small>亿</small>" : "—"}</div></div>
+        <div class="kpi"><div class="k">申购费</div><div class="v" style="font-size:17px">${fund.feeRate != null ? fund.feeRate + "<small>%</small>" : "—"}</div></div>
+      </div>` : ""}
+
+    <h3 style="margin:18px 0 6px;font-size:12px;color:var(--muted);font-weight:600">
+      综合分 ${score != null ? score.toFixed(1) : "—"} · 同类内分位打分
+    </h3>
+    <div>${factors.map((f) => `
+      <div class="factor-row">
+        <span>${esc(f.label)}</span>
+        <span class="bar"><i style="width:${(f.score * 100).toFixed(0)}%"></i></span>
+        <b>${(f.score * 100).toFixed(0)}</b>
+      </div>`).join("")}</div>
+    <p class="hold-empty" style="margin-top:12px">因子分是该基金在本类别内的相对位置（0~100），不是收益预测。</p>
+
+    <div class="btn-row" style="margin-top:6px">
+      <button class="btn ghost" id="addToHold">加入我的持仓</button>
+    </div>`;
+
+  $("#drawer").classList.add("on");
+  $("#closeDrawer").addEventListener("click", closeDrawer);
+  $("#addToHold")?.addEventListener("click", () => {
+    if (state.holdings.some((h) => h.code === code)) return toast("这只已经在持仓里了");
+    state.holdings.push({ code, amount: 0 });
+    saveState();
+    closeDrawer();
+    ui.preview = null;
+    renderPlan();
+    toast("已加入持仓，可填写当前金额");
+  });
+}
+const closeDrawer = () => $("#drawer").classList.remove("on");
+
+/* ---------------- 基金池 ---------------- */
+
+function renderPool() {
+  $("#poolCount").textContent = `${DATA.funds.length} 只 · 净值截至 ${DATA.asOf}`;
+  $("#poolToolbar").innerHTML = `
+    <input type="search" id="poolSearch" placeholder="搜基金名 / 代码" value="${esc(ui.q)}" />
+    ${[["all", "全部"], ...BUCKET_ORDER.map((b) => [b, BUCKETS[b].name])]
+      .map(([k, label]) => `<button class="pill ${ui.bucket === k ? "on" : ""}" data-bucket="${k}">${label}</button>`)
+      .join("")}`;
+
+  $("#poolSearch").addEventListener("input", (e) => {
+    ui.q = e.target.value.trim();
+    paintPoolTable();
+  });
+  $$("[data-bucket]").forEach((b) =>
+    b.addEventListener("click", () => {
+      ui.bucket = b.dataset.bucket;
+      renderPool();
+    })
+  );
+  paintPoolTable();
+}
+
+function paintPoolTable() {
+  const cols = [
+    { key: "name", label: "基金" },
+    { key: "bucket", label: "类别" },
+    { key: "r1y", label: "近1年", num: true, cls: "c-1y" },
+    { key: "cagr3y", label: "近3年年化", num: true },
+    { key: "mdd3y", label: "最大回撤", num: true },
+    { key: "vol3y", label: "年化波动", num: true, cls: "c-vol" },
+    { key: "sharpe3y", label: "夏普", num: true, cls: "c-sharpe" },
+    { key: "scale", label: "规模(亿)", num: true, cls: "c-scale" },
+    { key: "score", label: "综合分", num: true },
+  ];
+
+  let rows = DATA.funds.filter((f) => {
+    if (ui.bucket !== "all" && f.bucket !== ui.bucket) return false;
+    if (!ui.q) return true;
+    const q = ui.q.toLowerCase();
+    return f.name.toLowerCase().includes(q) || f.code.includes(q);
+  });
+  rows = rows.map((f) => ({ ...f, score: SCORES.get(f.code)?.total ?? 0 }));
+
+  const { key, dir } = ui.sort;
+  const sign = dir === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    if (key === "name") return a.name.localeCompare(b.name, "zh") * sign;
+    if (key === "bucket") return BUCKET_ORDER.indexOf(a.bucket) - BUCKET_ORDER.indexOf(b.bucket) || b.score - a.score;
+    return ((a[key] ?? 0) - (b[key] ?? 0)) * sign;
+  });
+
+  $("#poolTable").innerHTML = `
+    <div class="tablewrap">
+      <table class="grid">
+        <thead><tr>
+          ${cols.map((c) => `<th class="sortable ${c.num ? "num" : ""} ${c.cls || ""} ${ui.sort.key === c.key ? ui.sort.dir : ""}"
+            data-sort="${c.key}" style="${c.num ? "text-align:right" : ""}">${c.label}</th>`).join("")}
+        </tr></thead>
+        <tbody>
+          ${rows.map((f) => `
+            <tr data-code="${esc(f.code)}" style="cursor:pointer">
+              <td><div class="fname">${esc(f.name)}</div><div class="fcode">${esc(f.code)}${f.tag === "core" ? " · 核心" : ""}</div></td>
+              <td><span class="mix-pill"><i style="width:6px;height:6px;border-radius:2px;background:${BUCKETS[f.bucket].color}"></i>${BUCKETS[f.bucket].name}</span></td>
+              <td class="num c-1y" style="color:${f.r1y >= 0 ? "var(--buy)" : "var(--sell)"}">${pct(f.r1y)}</td>
+              <td class="num">${pct(f.cagr3y)}</td>
+              <td class="num">${pct(f.mdd3y)}</td>
+              <td class="num c-vol">${pct(f.vol3y)}</td>
+              <td class="num c-sharpe">${f.sharpe3y.toFixed(2)}</td>
+              <td class="num c-scale">${f.scale ? f.scale.toFixed(0) : "—"}</td>
+              <td class="num">
+                <span class="wbar"><i style="width:${Math.max(3, f.score)}%"></i></span>
+                <span style="margin-left:6px">${f.score.toFixed(1)}</span>
+              </td>
+            </tr>`).join("") || `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:26px">没有匹配的基金</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  $$("[data-sort]").forEach((th) =>
+    th.addEventListener("click", () => {
+      const k = th.dataset.sort;
+      if (ui.sort.key === k) ui.sort.dir = ui.sort.dir === "desc" ? "asc" : "desc";
+      else ui.sort = { key: k, dir: k === "name" ? "asc" : "desc" };
+      paintPoolTable();
+    })
+  );
+  $$("#poolTable tbody tr[data-code]").forEach((tr) =>
+    tr.addEventListener("click", () => openFundDrawer(tr.dataset.code))
+  );
+}
+
+/* ---------------- 历史 ---------------- */
+
+function renderHistory() {
+  const box = $("#historyList");
+  if (!state.reports.length) {
+    box.innerHTML = `<div class="empty">
+      <div class="big">还没有历史报告</div>
+      <div class="sub">每季度生成一次正式报告后，这里会保留季度、风险档、目标配置与调仓记录，方便对比。</div>
+    </div>`;
+    return;
+  }
+  box.innerHTML = state.reports
+    .map((r) => {
+      const p = PROFILES[r.risk] || PROFILES.balanced;
+      const top = [...r.picks].filter((x) => x.amount > 0).sort((a, b) => b.weight - a.weight).slice(0, 3);
+      return `<details class="hist-item">
+        <summary style="cursor:pointer;list-style:none">
+          <div class="hist-top">
+            <div>
+              <span class="hist-q">${r.quarter}</span>
+              <span class="badge" style="margin-left:8px">${p.name}</span>
+              <span class="hist-meta" style="margin-left:10px">${fmt(r.amount)} 元 · 估算波动 ${pct(r.riskInfo.vol)}</span>
+            </div>
+            <div class="hist-meta">生成于 ${timeCN(r.createdAt)} · 换手 ${r.currentTotal ? pct(r.turnover, 0) : "新建"}</div>
+          </div>
+          <div class="hist-meta" style="margin-top:6px">前三：${top.map((t) => `${esc(t.name)} ${pct(t.weight, 0)}`).join(" · ") || "—"}</div>
+        </summary>
+        <div style="margin-top:14px">
+          <div class="tablewrap"><table class="grid">
+            <thead><tr><th>基金</th><th style="text-align:right">目标占比</th><th style="text-align:right">目标金额</th><th>操作</th></tr></thead>
+            <tbody>${r.picks.map((x) => `<tr>
+              <td><div class="fname">${esc(x.name)}</div><div class="fcode">${esc(x.code)}</div></td>
+              <td class="num">${pct(x.weight)}</td><td class="num">${x.amount ? fmt(x.amount) : "—"}</td>
+              <td class="tone-${x.action.tone}">${x.action.label}</td></tr>`).join("")}</tbody>
+          </table></div>
+          <div class="btn-row" style="margin-top:12px">
+            <button class="btn ghost" data-export="${r.id}">导出 Markdown</button>
+            <button class="btn ghost" data-del="${r.id}" style="color:var(--sell)">删除这份报告</button>
+          </div>
+        </div>
+      </details>`;
+    })
+    .join("");
+
+  $$("[data-export]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const r = state.reports.find((x) => x.id === b.dataset.export);
+      if (r) downloadMarkdown(r);
+    })
+  );
+  $$("[data-del]").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (!confirm("删除后不可恢复，确定？")) return;
+      state.reports = state.reports.filter((x) => x.id !== b.dataset.del);
+      saveState();
+      renderHistory();
+      toast("已删除");
+    })
+  );
+}
+
+/* ---------------- 方法 ---------------- */
+
+function renderMethod() {
+  $("#methodBody").innerHTML = `
+    <h4>给另一台手机用</h4>
+    <div class="callout" id="shareInfo">正在读取本机地址…</div>
+
+    <h4>先看懂这几个词</h4>
+    <table class="glossary">
+      <tbody>
+        <tr><td>年化波动</td><td>一年里净值上下晃的幅度。9.8% 大致意思是「多数时候在 ±9.8% 内晃」，数字越大越颠。</td></tr>
+        <tr><td>最大回撤</td><td>历史上从最高点跌到最低点亏了多少。-15% 就是 10 万最多浮亏过 1.5 万。</td></tr>
+        <tr><td>夏普比率</td><td>「每承担一份波动，换来多少收益」。同样涨 10%，波动小的夏普更高，性价比更好。</td></tr>
+        <tr><td>有效持仓数</td><td>真正起分散作用的基金只数。买 10 只但走势一样，等于只买了 1 只。</td></tr>
+        <tr><td>换手率</td><td>这次要动的钱占总投入的比例。30% 就是三成的钱要买进或卖出，越低越省手续费。</td></tr>
+        <tr><td>核心 / 卫星</td><td>核心是宽基指数打底（跟大盘走），卫星是主动基金搏收益。核心稳、卫星冲。</td></tr>
+        <tr><td>A 类 / C 类</td><td>A 类买时收费、拿久了赎回费归零；C 类不收申购费但每天计提销售服务费。短期选 C，长期选 A。</td></tr>
+        <tr><td>赎回费</td><td>卖出时按持有时间收，通常持有越久越低；不满 7 天常见 1.5%，专门防短线。</td></tr>
+      </tbody>
+    </table>
+
+    <h4>这个工具每 3 个月做什么</h4>
+    <p>每个自然季度（1/4/7/10 月的首个交易日）生成一次配置建议：先按你的风险档确定股、债、现金、黄金、海外的比例，
+    再在候选池里用统一口径挑基金、定权重，最后和你填写的当前持仓做差，得到「买多少、卖多少」的清单。季度内不再改动，避免追涨杀跌。</p>
+
+    <h4>打分口径（同类内比较，满分 100）</h4>
+    <table>
+      <thead><tr><th>因子</th><th>权重</th><th>方向</th><th>说明</th></tr></thead>
+      <tbody>
+        ${FACTORS.map((f) => `<tr><td>${f.label}</td><td>${(f.weight * 100).toFixed(0)}%</td>
+          <td>${f.better === "high" ? "越高越好" : "越低越好"}</td><td>${
+            { sharpe3y: "近三年年化收益减去无风险利率，再除以波动", cagr3y: "近三年复利年化", mdd3y: "近三年最大回撤，越浅越好",
+              vol3y: "日收益标准差年化", feeRate: "申购费率（不含管理费/托管费）", r1y: "近一年收益，作为短期动量", scaleFit: "20~150 亿最舒适",
+              managerYears: "现任经理任职年限，上限按 8 年计" }[f.key]
+          }</td></tr>`).join("")}
+      </tbody>
+    </table>
+    <p>所有因子先在<b>同一个大类内</b>做 min-max 归一化，再加权求和。跨大类不做比较：债券基金的收益本来就不该和股票基金比。</p>
+
+    <h4>从分数到权重</h4>
+    <p>先用风险档给出大类目标（例如平衡型：股 40%、债 30%、海外 14%、现金 8%、黄金 8%）。
+    权益内部再按<b>核心-卫星</b>拆：宽基指数打底（平衡型 45%），主动与主题基金做卫星。
+    类内权重用 softmax（分数差 10 分 ≈ 权重比 1 : 0.35），单只上限 35%，低于 1.5% 的碎仓会被合并。</p>
+
+    <h4>组合风险怎么算</h4>
+    <p>不是把各基金波动相加，而是用过去 250 个交易日的日收益算相关矩阵 Σ，再算
+    <code>σ = √(wᵀΣw)</code>。最大回撤按 <code>1.55 × σ</code> 做量级估算，只是参考值，不是预测。</p>
+
+    <h4>数据从哪来</h4>
+    <p>公开页面抓取：基金排行榜、<code>pingzhongdata</code> 净值序列、基金类型字典，当前快照截至 ${esc(DATA.asOf)}。
+    收益按「日涨跌幅连乘」计算（含分红再投），而不是用单位净值直接相除。
+    抓取时会剔除单日涨跌超过 25%、或纯债基金波动超过 30% 的异常序列（多为份额折算、分红缺口）。</p>
+
+    <h4>数据每天刷新</h4>
+    <p>净值、规模、费率每天 08:00 由服务端刷新（<code>/api/refresh</code>），08:30 再跑一次持仓检查。
+    页面顶部显示「净值 X 天前」，超过 2 天变黄，超过 3 天才提示手动刷新（净值本身有 1 天延迟，周末更久）。报告本身仍按季度锁定——数据是新的，结论不动。</p>
+
+    <h4>什么时候卖出</h4>
+    <p>卖出只在三种情况发生：① 换季时该基金跌出本期配置；② 每日盯盘判定走势走坏（自动执行，可撤销）；③ 你主动缩小投入金额。
+    报告里的「卖出与持有期」会给出每只的<b>最早可卖日</b>和<b>赎回费估算</b>，规则是：</p>
+    <table>
+      <thead><tr><th>持有时间</th><th>权益类（常见）</th><th>债券类（常见）</th></tr></thead>
+      <tbody>
+        <tr><td>不满 7 天</td><td>1.50%</td><td>1.50%</td></tr>
+        <tr><td>7~30 天</td><td>0.75%</td><td>0.10%</td></tr>
+        <tr><td>30 天~1 年</td><td>0.50%</td><td>0</td></tr>
+        <tr><td>1~2 年</td><td>0.25%</td><td>0</td></tr>
+        <tr><td>2 年以上</td><td>0</td><td>0</td></tr>
+      </tbody>
+    </table>
+    <p>提交时点：交易日 <b>15:00 前</b>按当日净值确认，15:00 之后顺延一个交易日。所以「什么时候卖」的实操答案是：
+    换季当天 15:00 前下单；如果持有不满 7 天，等满 7 天后的第一个交易日再卖；差几天就能降档的，报告会直接告诉你省多少。</p>
+
+    <div class="callout warn">
+      <b>这不是投资建议。</b>模型只用历史净值与费率，不预测市场，不包含你的税、申赎限制、持有期惩罚费与个人现金流。
+      真实下单前请自行核对基金合同、费率与风险等级（R1~R5）；权益类基金随时可能亏损 30% 以上。
+    </div>`;
+  loadShareInfo();
+}
+
+async function loadShareInfo() {
+  const box = $("#shareInfo");
+  if (!box) return;
+  if (OFFLINE) {
+    box.innerHTML = "这是单文件版，直接把这个 HTML 发到另一台手机、用浏览器打开即可。";
+    return;
+  }
+  try {
+    const st = await (await fetch("/api/status", { cache: "no-store" })).json();
+    const lan = (st.addresses || []).filter((ip) => !ip.startsWith("10.") && !ip.startsWith("172."));
+    const v6 = st.ipv6 || [];
+    const lines = [];
+    if (lan.length) lines.push(`同一 Wi-Fi 下打开：<br/>${lan.map((ip) => `<b style="font-family:var(--mono)">http://${ip}:${st.port}</b>`).join("<br/>")}`);
+    if (v6.length) lines.push(`另一台也在移动网络时，试 IPv6：<br/>${v6.slice(0, 2).map((ip) => `<b style="font-family:var(--mono);font-size:12px">http://[${ip}]:${st.port}</b>`).join("<br/>")}<br/><span style="color:#8a5a12">运营商常拦入站，打不开就用 Wi-Fi 或单文件版。</span>`);
+    if (!lan.length) lines.push("现在这台走的是移动网络，没有局域网地址。连上 Wi-Fi（或开热点让另一台连过来）后刷新本页，就会出现局域网地址。");
+    box.innerHTML = lines.join("<hr style='border:0;border-top:1px dashed #d9d3c4;margin:8px 0'/>");
+  } catch {
+    box.innerHTML = "读不到服务状态，确认用 npm start 启动后再看。";
+  }
+}
+
+/* ---------------- 导出 ---------------- */
+
+function reportMarkdown(r) {
+  const p = PROFILES[r.risk] || PROFILES.balanced;
+  const lines = [];
+  lines.push(`# 季策 · ${r.quarter} 基金配置建议`, "");
+  lines.push(`- 风险档：${p.name}（${p.desc}）`);
+  lines.push(`- 计划投入：${fmt(r.amount)} 元`);
+  lines.push(`- 净值基准：${r.asOf || DATA.asOf}`);
+  lines.push(`- 生成时间：${timeCN(r.createdAt)}`);
+  lines.push(`- 估算年化波动：${pct(r.riskInfo.vol)}；估算最大回撤：${pct(r.riskInfo.estDrawdown, 0)}；有效持仓数：${r.riskInfo.effN.toFixed(1)}`, "");
+  lines.push("## 大类配比", "", "| 大类 | 占比 |", "|---|---|");
+  for (const b of BUCKET_ORDER) if ((r.bucketMix[b] || 0) > 0) lines.push(`| ${BUCKETS[b].name} | ${pct(r.bucketMix[b])} |`);
+  lines.push("", "## 目标配置", "", "| 基金 | 代码 | 类别 | 目标占比 | 目标金额 | 当前 | 差额 | 操作 | 综合分 |", "|---|---|---|---|---|---|---|---|---|");
+  for (const x of r.picks) {
+    lines.push(`| ${x.name} | ${x.code} | ${BUCKETS[x.bucket].name} | ${pct(x.weight)} | ${x.amount ? fmt(x.amount) : "—"} | ${x.current ? fmt(x.current) : "—"} | ${x.delta ? signed(x.delta) : "—"} | ${x.action.label} | ${x.score.toFixed(1)} |`);
+  }
+  lines.push("", "## 说明", "");
+  for (const n of r.notes) lines.push(`- ${n}`);
+  lines.push("", "> 本报告由规则化模型自动生成，仅用于个人研究与配置参考，不构成投资建议。基金有风险，投资需谨慎。");
+  return lines.join("\n");
+}
+
+function download(name, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function downloadMarkdown(r) {
+  download(`季策-${r.quarter}-配置建议.md`, reportMarkdown(r), "text/markdown;charset=utf-8");
+  toast("已导出 Markdown");
+}
+
+function icsDate(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}00Z`;
+}
+
+function downloadIcs(r) {
+  // 下一次提醒：下一季度首个交易日 09:30（UTC 01:30），之后每 3 个月重复
+  const next = nextQuarterStart(new Date(r.createdAt));
+  next.setHours(9, 30, 0, 0);
+  const end = new Date(next.getTime() + 30 * 60000);
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//JiCe//Fund Quarter//CN", "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:jice-${r.quarter}-${Date.now()}@local`,
+    `DTSTAMP:${icsDate(new Date())}`,
+    `DTSTART:${icsDate(next)}`,
+    `DTEND:${icsDate(end)}`,
+    "RRULE:FREQ=MONTHLY;INTERVAL=3",
+    `SUMMARY:季策 · 生成 ${r.quarter} 之后的新一季配置`,
+    "DESCRIPTION:打开季策，按当前金额与风险档生成本季度配置；上一期报告：" + r.quarter,
+    "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", "DESCRIPTION:季策季度提醒", "END:VALARM",
+    "END:VEVENT", "END:VCALENDAR", "",
+  ].join("\r\n");
+  download(`季策-季度提醒-${next.getFullYear()}Q${Math.floor(next.getMonth() / 3) + 1}.ics`, ics, "text/calendar;charset=utf-8");
+  toast("已生成日历文件，导入后每 3 个月提醒一次");
+}
+
+async function copySummary(r) {
+  const tops = r.picks.filter((x) => x.amount > 0).slice(0, 5)
+    .map((x) => `${x.name} ${pct(x.weight, 0)}（${fmt(x.amount)} 元，${x.action.label}）`).join("；");
+  const text = `${r.quarter} 配置（${(PROFILES[r.risk] || PROFILES.balanced).name}，${fmt(r.amount)} 元）：${tops}。估算年化波动 ${pct(r.riskInfo.vol)}。`;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("要点已复制");
+  } catch {
+    toast("复制失败，请手动选择文本");
+  }
+}
+
+/* ---------------- 杂项 ---------------- */
+
+function scrollToReport() {
+  const el = $("#planMain");
+  if (!el) return;
+  const top = el.getBoundingClientRect().top + window.scrollY - 8;
+  window.scrollTo({ top, behavior: "smooth" });
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+$$("#tabs button").forEach((b) =>
+  b.addEventListener("click", () => {
+    ui.view = b.dataset.view;
+    render();
+  })
+);
+$("#drawer").addEventListener("click", (e) => {
+  if (e.target.id === "drawer") closeDrawer();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeDrawer();
+});
+
+boot();
+
+})();
+</script>
+</body>
+</html>
