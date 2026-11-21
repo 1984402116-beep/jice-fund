@@ -1459,7 +1459,7 @@ let hasBackend = null; // null=未知 true=有 /api false=纯静态托管
 const offlineHint = (action = "刷新") => {
   if (OFFLINE) return toast(`单文件版（file://）没有后台，不能「${action}」；请用 npm start 或本地版`);
   if (hasBackend === false && apiBase()) {
-    return toast(`后端暂时连不上（网络或 Cloudflare 被拦），「${action}」稍后重试；本地版不受影响`);
+    return toast(`网页版不跑净值和盯盘，只做配置参考；请用手机本地版查看持仓和提醒`);
   }
   return toast(`没有后台，不能「${action}」；请在项目目录运行 npm start`);
 };
@@ -1473,7 +1473,7 @@ async function recheckBackend() {
   } catch { hasBackend = false; }
   const note = $("#backNote");
   if (note) {
-    note.textContent = hasBackend ? "后端：已连接" : "后端：连不上（检查网络后再点一次）";
+    note.textContent = hasBackend ? "后端：已连接" : "后端：未连接（网页版只做配置）";
     note.className = "btn-note " + (hasBackend ? "ok" : "warn");
   }
   return hasBackend;
@@ -1835,15 +1835,36 @@ async function checkNow() {
     const start = await fetch(api("/api/watch"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      // 不带 holdings：让服务端用已保存的分笔持仓（本地刚改的会先 syncState 过去）
-      body: JSON.stringify({ wxKey: store.get("qfa.wx") || "", device: deviceId() }),
+      // 本地版不带 holdings（用服务端分笔持仓）；云端（FC/Worker）无状态，必须把持仓带上
+      body: JSON.stringify(
+        apiBase()
+          ? { holdings: state.holdings.map((h) => ({ code: h.code, amount: h.amount, since: h.since })), wxKey: store.get("qfa.wx") || "", device: deviceId() }
+          : { wxKey: store.get("qfa.wx") || "", device: deviceId() }
+      ),
     });
     if (!start.ok) throw new Error(`后台没有响应（HTTP ${start.status}）`);
     const first = await start.json().catch(() => ({}));
     if (first.accepted === false) { toast(first.message || "先填持仓再检查"); return; }
     // 云端（Worker）是同步计算，响应里直接带结果，不用轮询
     if (typeof first.checked === "number") {
-      ui.alerts = { generatedAt: first.generatedAt, checked: first.checked, items: first.items || [], actions: [] };
+      // 兼容云端旧格式：hits 可能是字符串、没有名称/金额/颜色
+      const normCloud = (it) => {
+        const local = state.holdings.find((h) => h.code === it.code);
+        const fund = DATA.funds.find((f) => f.code === it.code);
+        const hits = (it.hits || []).map((x) => (typeof x === "string" ? { text: x } : x));
+        const level = it.level === "high" || it.level === "confirmed" ? it.level : "watch";
+        return {
+          ...it,
+          name: it.name || fund?.name || it.code,
+          amount: it.amount ?? local?.amount ?? 0,
+          hits,
+          level,
+          color: it.color || (level === "high" || level === "confirmed" ? "red" : "yellow"),
+          replacement: it.replacement || null,
+          fee: it.fee || { holdingDays: null, rate: null, amount: 0, tooEarly: false },
+        };
+      };
+      ui.alerts = { generatedAt: first.generatedAt, checked: first.checked, items: (first.items || []).map(normCloud), actions: [] };
       renderPlan();
       const redN0 = first.colors?.red ?? (first.items || []).filter((i) => i.color === "red").length;
       toast(redN0 ? `红灯：${redN0} 只建议换仓` : first.items?.length ? `黄灯：${first.items.length} 只观察中` : `检查完成：${first.checked} 只持仓正常`);
@@ -2123,7 +2144,7 @@ function renderSide() {
       </button>
       <button class="btn ghost" id="preview" style="width:100%;margin-top:8px">预览下一季度（不锁定）</button>
       <button class="btn ghost" id="checkNow" style="width:100%;margin-top:8px">${hasBackend === false ? "检查持仓（后端未连通）" : "检查持仓（每日盯盘）"}</button>
-      <p class="btn-note" id="backNote">${hasBackend === false ? "后端：连不上（检查网络后再点一次）" : "后端：已连接"}</p>
+      <p class="btn-note" id="backNote">${hasBackend === false ? "后端：未连接（网页版只做配置）" : "后端：已连接"}</p>
       <p class="btn-note">检查持仓 = 拉取最新净值，判断你填的持仓有没有走坏；有信号会推微信。网页版由云端计算，本地版由手机计算。</p>
       <button class="btn ghost" id="refreshHistory" style="width:100%;margin-top:8px">刷新净值数据（真实行情）</button>
       <button class="btn ghost" id="testPush" style="width:100%;margin-top:8px">${apiBase() !== "" ? "测试微信提醒" : "测试推送"}</button>
