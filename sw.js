@@ -1,4 +1,4 @@
-const CACHE = "jice-20261119-mwphowzj";
+const CACHE = "jice-20261119-mwpnawmr";
 // 联网优先：更新后立刻生效；断网时回退到缓存，离线仍可用
 self.addEventListener("install", (e) => e.waitUntil(self.skipWaiting()));
 self.addEventListener("activate", (e) => {
@@ -22,4 +22,31 @@ self.addEventListener("fetch", (e) => {
       })
       .catch(() => caches.match("./index.html"))
   );
+});
+
+// —— Web Push：关掉网页也能收到卖出提醒
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: (e.data && e.data.text && e.data.text()) || "" }; }
+  const title = d.title || "季策";
+  const body = d.body || "有新的卖出信号，打开看看";
+  e.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: "./icon.svg",
+    badge: "./icon.svg",
+    tag: "jice-push",
+    renotify: true,
+    data: { url: d.url || "./" },
+  }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const target = (e.notification.data && e.notification.data.url) || "./";
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of list) {
+      if (c.url.includes("jice") || c.url.includes(":4173")) return c.focus();
+    }
+    return self.clients.openWindow(target);
+  })());
 });
