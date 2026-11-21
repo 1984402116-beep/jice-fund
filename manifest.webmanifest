@@ -1,18 +1,41 @@
 {
-  "name": "季策 · 基金季度配置",
+  "name": "季策 · 基金季度配置助手",
   "short_name": "季策",
+  "description": "每季度一次基金配置建议，每天盯持仓；买入时间轴与短期波动预测。",
+  "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait",
   "background_color": "#f5f5f1",
   "theme_color": "#0f6f5c",
-  "description": "每季度一次基金配置建议，每天盯持仓",
+  "categories": [
+    "finance",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "shortcuts": []
 }

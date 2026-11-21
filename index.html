@@ -547,6 +547,11 @@ footer.foot b { color: #7a8291; }
 
 </style>
   <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="季策" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <script>
     if (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1") {
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -1066,7 +1071,8 @@ function buildSellPlan({ picks, holdings = [], createdAt = new Date() }) {
     if (sell <= 0) continue;
     const hold = holdings.find((h) => h.code === p.code);
     const since = hold?.since ? new Date(hold.since) : null;
-    const days = since && !Number.isNaN(since.getTime()) ? Math.floor((today - since) / 86400000) : null;
+    const confirm = confirmDateOf(hold?.since);
+    const days = confirm ? Math.floor((today - confirm) / 86400000) : null;
     const tier = feeTier(days == null ? 30 : Math.max(0, days), p.bucket);
     const feeRate = tier.rate;
     const fee = Math.round(sell * feeRate);
@@ -1077,7 +1083,7 @@ function buildSellPlan({ picks, holdings = [], createdAt = new Date() }) {
       earliest = nextTradingDay(addDays(today, 1));
       window = "报告期内 1~3 个交易日（交易日 15:00 前提交）";
     } else if (days < 7) {
-      earliest = nextTradingDay(addDays(since, 7));
+      earliest = nextTradingDay(addDays(confirm, 7));
       window = `等到 ${fmtDate(earliest)}（持有满 7 天）之后的首个交易日再提交，否则按 1.5% 收惩罚性赎回费`;
     } else {
       earliest = nextTradingDay(addDays(today, 1));
@@ -1088,7 +1094,7 @@ function buildSellPlan({ picks, holdings = [], createdAt = new Date() }) {
     let waitHint = null;
     if (days != null && tier.nextLimit !== Infinity && tier.nextLimit - days <= 10 && tier.nextRate < feeRate) {
       waitHint = `再持有 ${Math.ceil(tier.nextLimit - days)} 天，赎回费率从 ${(feeRate * 100).toFixed(2)}% 降到 ${(tier.nextRate * 100).toFixed(2)}%，可省约 ${Math.round(sell * (feeRate - tier.nextRate))} 元`;
-      const waitDate = nextTradingDay(addDays(since, Math.ceil(tier.nextLimit - days)));
+      const waitDate = nextTradingDay(addDays(confirm, Math.ceil(tier.nextLimit - days)));
       if (waitDate < earliest) earliest = waitDate;
     }
 
@@ -1346,6 +1352,57 @@ const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 const fmt = (n) => Number(n || 0).toLocaleString("zh-CN", { maximumFractionDigits: 0 });
+const scHint = (code) => {
+  const s = window.__QFA_SC?.[code];
+  if (!s) return "";
+  return s.recommend === "C" ? ` · 买C ${s.cCode}` : " · A更省";
+};
+
+// 买入 → 确认份额（开始计收益）→ 看收益 的日期
+// 口径：持有天数从“份额确认日”起算，和 7 天惩罚费一致
+const parseDay = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+const OFF_DAYS = new Set(["01-01", "10-01", "10-02", "10-03", "05-01"]);
+const isOffDay = (d) => {
+  const md = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return d.getDay() === 0 || d.getDay() === 6 || OFF_DAYS.has(md);
+};
+const nextTradeAfter = (d) => {
+  const x = new Date(d);
+  do { x.setDate(x.getDate() + 1); } while (isOffDay(x));
+  return x;
+};
+const effectiveDateOf = (since) => {
+  const d = parseDay(since);
+  if (!d) return null;
+  let eff = new Date(d);
+  while (isOffDay(eff)) eff.setDate(eff.getDate() + 1);
+  return eff;
+};
+const confirmDateOf = (since) => {
+  const eff = effectiveDateOf(since);
+  return eff ? nextTradeAfter(eff) : null;
+};
+const mdCN = (d) => `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const tradeDates = (since) => {
+  const eff = effectiveDateOf(since);
+  const confirm = confirmDateOf(since);
+  if (!eff || !confirm) return null;
+  const earnings = nextTradeAfter(confirm);
+  return { effective: mdCN(eff), confirm: mdCN(confirm), earnings: mdCN(earnings) };
+};
+const holdDaysText = (since) => {
+  const confirm = confirmDateOf(since);
+  if (!confirm) return "";
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.max(0, Math.round((today - confirm) / 86400000));
+  const td = tradeDates(since);
+  if (!td) return `持有 ${days} 天`;
+  return `持有 ${days} 天 · 确认份额 ${td.confirm} 开始计收益 · 看收益 ${td.earnings}`;
+};
 const pct = (x, d = 1) => `${(Number(x || 0) * 100).toFixed(d)}%`;
 const signed = (n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmt(Math.abs(n))}`;
 const dateCN = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1452,7 +1509,12 @@ async function pushStateTo(base) {
     const r = await fetch(`${base}/api/state?d=${encodeURIComponent(deviceId())}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ risk: state.risk, amount: state.amount, holdings: state.holdings }),
+      // 只同步“基金 + 总额 + 最早买入日”，分笔明细由服务端保留
+      body: JSON.stringify({
+        risk: state.risk,
+        amount: state.amount,
+        holdings: state.holdings.map((h) => ({ code: h.code, amount: h.amount, since: h.since })),
+      }),
     });
     return r.ok;
   } catch {
@@ -1521,6 +1583,12 @@ async function boot() {
   }
   SCORES = scoreFunds(DATA.funds);
 
+  // A/C 份额对照（服务端算好 90 天成本）：买 C 更省时在买入清单里标注
+  fetch("/api/share-class?all=1&days=90", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { if (j?.list) { window.__QFA_SC = {}; for (const x of j.list) window.__QFA_SC[x.aCode] = x; } })
+    .catch(() => {});
+
   // 分享/演示用参数：?risk=balanced&amount=200000&demo=1
   const params = new URLSearchParams(location.search);
   const apiParam = params.get("api");
@@ -1574,7 +1642,7 @@ async function boot() {
 
   // 读取每日盯盘结果（后台脚本写的 data/alerts.json）
   try {
-    const r = await fetch(api("/api/alerts"), { cache: "no-store" });
+    const r = await fetch(api("/api/alerts?d=" + encodeURIComponent(deviceId())), { cache: "no-store" });
     ui.alerts = r.ok ? await r.json() : null;
   } catch {
     ui.alerts = null;
@@ -1738,7 +1806,7 @@ async function autoWatchIfStale() {
   const ts = ui.alerts?.generatedAt ? new Date(ui.alerts.generatedAt).getTime() : 0;
   if (Date.now() - ts < 12 * 3600e3) return;
   try {
-    await fetch(api("/api/watch"), { method: "POST" });
+    await fetch(api("/api/watch"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device: deviceId() }) });
   } catch {
     return;
   }
@@ -1748,7 +1816,7 @@ async function autoWatchIfStale() {
     if (!st.watch?.running) break;
   }
   try {
-    const a = await (await fetch(api("/api/alerts"), { cache: "no-store" })).json();
+    const a = await (await fetch(api("/api/alerts?d=" + encodeURIComponent(deviceId())), { cache: "no-store" })).json();
     if (a.items?.length) {
       ui.alerts = a;
       renderPlan();
@@ -1767,15 +1835,18 @@ async function checkNow() {
     const start = await fetch(api("/api/watch"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ holdings: state.holdings, wxKey: store.get("qfa.wx") || "" }),
+      // 不带 holdings：让服务端用已保存的分笔持仓（本地刚改的会先 syncState 过去）
+      body: JSON.stringify({ wxKey: store.get("qfa.wx") || "", device: deviceId() }),
     });
     if (!start.ok) throw new Error(`后台没有响应（HTTP ${start.status}）`);
     const first = await start.json().catch(() => ({}));
+    if (first.accepted === false) { toast(first.message || "先填持仓再检查"); return; }
     // 云端（Worker）是同步计算，响应里直接带结果，不用轮询
     if (typeof first.checked === "number") {
       ui.alerts = { generatedAt: first.generatedAt, checked: first.checked, items: first.items || [], actions: [] };
       renderPlan();
-      toast(first.items?.length ? `发现 ${first.items.length} 只需要处理` : `检查完成：${first.checked} 只持仓暂时没有走坏`);
+      const redN0 = first.colors?.red ?? (first.items || []).filter((i) => i.color === "red").length;
+      toast(redN0 ? `红灯：${redN0} 只建议换仓` : first.items?.length ? `黄灯：${first.items.length} 只观察中` : `检查完成：${first.checked} 只持仓正常`);
       return;
     }
     for (let i = 0; i < 60; i++) {
@@ -1784,10 +1855,12 @@ async function checkNow() {
       if (!sr.ok) throw new Error("读不到后台状态");
       const st = await sr.json();
       if (!st.watch?.running) {
-        const alerts = await (await fetch(api("/api/alerts"), { cache: "no-store" })).json();
+        const alerts = await (await fetch(api("/api/alerts?d=" + encodeURIComponent(deviceId())), { cache: "no-store" })).json();
         ui.alerts = alerts;
         renderPlan();
-        toast(alerts.items?.length ? `发现 ${alerts.items.length} 只需要处理` : "检查完成，持仓暂时没有走坏");
+        const redN = alerts.colors?.red ?? (alerts.items || []).filter((i) => i.color === "red").length;
+        const yellowN = alerts.colors?.yellow ?? Math.max(0, (alerts.items || []).length - redN);
+        toast(redN ? `红灯：${redN} 只建议换仓` : yellowN ? `黄灯：${yellowN} 只观察中` : "检查完成，持仓正常");
         return;
       }
     }
@@ -1841,7 +1914,7 @@ function insertAlertCard(root) {
         ? pending.map((it) => `
         <div class="alert-row">
           <div class="alert-head">
-            <span class="badge ${it.level === "watch" ? "amber" : "red"}">${it.level === "high" ? "建议卖出" : it.level === "confirmed" ? "观察确认" : "观察中"}</span>
+            <span class="badge ${it.level === "watch" ? "amber" : "red"}">${it.level === "high" ? "红灯 · 建议换仓" : it.level === "confirmed" ? "红灯 · 观察确认" : "黄灯 · 观察中"}</span>
             <b>${esc(it.name)}</b>
             <span class="fcode">${esc(it.code)} · ${fmt(it.amount)} 元 · 综合分 ${it.score ?? "—"}${it.observe ? ` · 连续 ${it.observe.days}/${it.observe.need} 天` : ""}</span>
           </div>
@@ -2174,7 +2247,7 @@ function renderHoldings() {
         <div class="hold-meta">
           <label for="since-${i}">买入日期</label>
           <input type="date" id="since-${i}" data-hold-since="${i}" value="${h.since || ""}" />
-          <span>${h.since ? `持有 ${Math.max(0, Math.floor((Date.now() - new Date(h.since)) / 86400000))} 天` : "填了才能算赎回费"}</span>
+          <span>${h.since ? holdDaysText(h.since) : "填了才能算赎回费"}</span>
         </div>
       </div>`
     )
@@ -2357,7 +2430,7 @@ function paintReport(root, report, { preview = false } = {}) {
           <tbody>
             ${report.picks.map((x) => `
               <tr data-code="${esc(x.code)}" style="cursor:pointer">
-                <td><div class="fname">${esc(x.name)}</div><div class="fcode">${esc(x.code)}${x.tag === "core" ? " · 核心" : ""}</div>${reasonTags(x)}</td>
+                <td><div class="fname">${esc(x.name)}</div><div class="fcode">${esc(x.code)}${x.tag === "core" ? " · 核心" : ""}${scHint(x.code)}</div>${reasonTags(x)}</td>
                 <td class="c-hide-sm"><span class="mix-pill"><i style="width:6px;height:6px;border-radius:2px;background:${BUCKETS[x.bucket].color}"></i>${BUCKETS[x.bucket].name}</span></td>
                 <td class="num">${pct(x.weight)}</td>
                 <td class="num">${x.amount ? fmt(x.amount) : "—"}</td>
@@ -2436,7 +2509,7 @@ function paintReport(root, report, { preview = false } = {}) {
       <h3>执行要点</h3>
       <div class="prose" style="font-size:13px">
         <p><b>本期买入 ${buys.length} 笔，卖出 ${sells.length} 笔。</b>
-        场外基金按金额申购，建议分 2~3 个交易日下单，避开单日大涨大跌；C 类份额持有不满 7 天有 1.5% 惩罚性赎回费，短期调仓优先用 A 类长期持有。</p>
+        场外基金按金额申购，建议分 2~3 个交易日下单，避开单日大涨大跌。A/C 已按 90 天持有自动比较：表里标「买C」的按 C 类代码下单，标「A更省」的买 A；两类都受 7 天内 1.5% 惩罚性赎回费约束，已持有的份额不建议为了省费去换。</p>
         <p>目标占比是「占总投入」的口径：已有持仓 + 新增资金一起算，所以差额为负就是要赎回的金额。</p>
       </div>
       <p class="disclaim">以上内容仅供参考，不构成投资建议。据此操作，风险自担。—— 做者：杰杰</p>
@@ -2530,7 +2603,14 @@ async function copyOrders(r) {
   const buys = r.picks.filter((x) => x.amount > 0);
   const sells = r.picks.filter((x) => x.delta < 0);
   const lines = [`季策 ${r.quarter} 买入清单（合计 ${fmt(r.amount)} 元）`];
-  buys.forEach((x, i) => lines.push(`${i + 1}. ${x.name}（${x.code}） ${fmt(x.amount)} 元`));
+  buys.forEach((x, i) => {
+    const sc = window.__QFA_SC?.[x.code];
+    if (sc?.recommend === "C") {
+      lines.push(`${i + 1}. ${sc.cName}（${sc.cCode}，对应 A 类 ${x.code}） ${fmt(x.amount)} 元 —— 持有 90 天比 A 省 ${(sc.saving * 100).toFixed(2)}%`);
+    } else {
+      lines.push(`${i + 1}. ${x.name}（${x.code}） ${fmt(x.amount)} 元${sc ? " —— 持有 90 天 A 更省" : ""}`);
+    }
+  });
   if (sells.length) {
     lines.push("", "卖出：");
     sells.forEach((x) => lines.push(`· ${x.name}（${x.code}） ${fmt(-x.delta)} 元`));
@@ -2976,8 +3056,8 @@ async function reportDiag(stage, msg) {
 async function ensurePushSubscription() {
   if (!("serviceWorker" in navigator)) { reportDiag("check", "no serviceWorker"); return { ok: false, error: "这个浏览器没有 Service Worker" }; }
   if (!("PushManager" in window)) { reportDiag("check", "no PushManager"); return { ok: false, error: "这个浏览器没有 Push API" }; }
-  const base = apiBase();
-  if (!base) return { ok: false, error: "没有后端地址" };
+  // 本地同源时 apiBase() 返回空串，这里不能当成“没有后端”
+  const base = apiBase() || location.origin;
   try {
     let reg = null;
     try { reg = await navigator.serviceWorker.ready; } catch (e) { reportDiag("sw-ready", e.message); reg = await navigator.serviceWorker.register("./sw.js"); }
@@ -2995,7 +3075,7 @@ async function ensurePushSubscription() {
         throw e;
       }
     }
-    const r = await fetch(api("/api/push/subscribe"), {
+    const r = await fetch(api("/api/push/subscribe?d=" + encodeURIComponent(deviceId())), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(sub),
@@ -3177,7 +3257,7 @@ function bindDeviceEvents() {
 // 微信接口统一走当前后端：
 //  - 本地版 → 本地服务（自己有存储）
 //  - 网页版 → 阿里云 FC，它会服务端转发到 Cloudflare（有 KV），不受手机网络影响
-const wxApi = (p) => api(p);
+const wxApi = (p) => api(p + (p.includes("?") ? "&" : "?") + "d=" + encodeURIComponent(deviceId()));
 
 async function refreshWxState() {
   const el = $("#wxState");
@@ -3234,7 +3314,7 @@ async function autoRebindWx() {
     const r = await fetch(wxApi("/api/wx/status"), { cache: "no-store" });
     const j = await r.json();
     if (!j.bound) {
-      await fetch(api("/api/wx/subscribe"), {
+      await fetch(api("/api/wx/subscribe?d=" + encodeURIComponent(deviceId())), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ key: saved }),
@@ -3327,7 +3407,7 @@ async function testPush() {
   if (OFFLINE) return offlineHint("测试推送");
   let r;
   try {
-    r = await fetch(api("/api/push/test"), { method: "POST" });
+    r = await fetch(api("/api/push/test?d=" + encodeURIComponent(deviceId())), { method: "POST" });
   } catch {
     return toast("连不上后端：检查网络后重试（本地版不受影响）");
   }
@@ -3338,20 +3418,7 @@ async function testPush() {
 }
 
 async function askNotify() {
-  if (!notifySupported()) {
-    return toast("当前浏览器不支持通知：用 Chrome 打开本页即可开启；iOS 需先「添加到主屏幕」");
-  }
-  try {
-    const p = await Notification.requestPermission();
-    if (p === "granted") {
-      toast("已开启卖出提醒：页面开着时，发现该卖会弹系统通知");
-      renderBell();
-    } else {
-      toast("通知被拒绝，可在浏览器设置里允许本站通知");
-    }
-  } catch (e) {
-    toast("通知授权失败：" + e.message);
-  }
+  toast("网页端不发系统通知；微信提醒在「今日收益」页底部的管理入口绑定");
 }
 
 function stampNow(d = new Date()) {
@@ -3359,6 +3426,7 @@ function stampNow(d = new Date()) {
 }
 
 function notifySells(rows) {
+  return; // 网页端不发系统通知，卖出提醒统一走微信
   if (!notifyGranted() || !rows.length) return;
   const seen = store.get(NOTIFY_KEY);
   const today = stampNow().slice(0, 10);
@@ -3549,6 +3617,116 @@ document.addEventListener("keydown", (e) => {
 
 boot();
 
+})();
+</script>
+
+<!-- 安装到桌面（PWA）：可安装时出现，点一次即可 -->
+<div id="pwaTip" style="position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;display:none;background:#fff;border:1px solid #e6e4dc;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.10);padding:10px 12px;font:13px/1.5 system-ui,sans-serif;color:#14181f;align-items:center;gap:10px">
+  <span id="pwaTipText" style="flex:1">把季策装到桌面，点开就是全屏</span>
+  <button id="pwaInstallBtn" style="background:#0f6f5c;color:#fff;border:0;border-radius:10px;padding:8px 12px;font-size:13px">安装</button>
+  <button id="pwaCloseBtn" style="background:none;border:0;color:#7a8291;font-size:15px;padding:4px 6px">×</button>
+</div>
+<script>
+(function () {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(function () {});
+  var tip = document.getElementById("pwaTip");
+  var btn = document.getElementById("pwaInstallBtn");
+  var txt = document.getElementById("pwaTipText");
+  var close = document.getElementById("pwaCloseBtn");
+  if (!tip || !btn) return;
+  var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+  if (standalone) return;
+  var deferred = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferred = e;
+    tip.style.display = "flex";
+    txt.textContent = "把季策装到桌面，点开就是全屏";
+  });
+  btn.addEventListener("click", async function () {
+    if (deferred) {
+      deferred.prompt();
+      try { await deferred.userChoice; } catch (_) {}
+      deferred = null;
+      tip.style.display = "none";
+      return;
+    }
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    txt.textContent = ios ? "点 Safari 底部分享 → 添加到主屏幕" : "点浏览器菜单 → 添加到主屏幕";
+    btn.style.display = "none";
+  });
+  close.addEventListener("click", function () { tip.style.display = "none"; });
+  window.addEventListener("appinstalled", function () { tip.style.display = "none"; });
+})();
+</script>
+
+<style>
+.app-nav{position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;gap:6px;background:#fff;border-top:1px solid #e8e6de;padding:6px 10px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.05)}
+.app-nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0 5px;font:11.5px/1.15 system-ui,sans-serif;color:#7a8291;text-decoration:none;border-radius:10px}
+.app-nav a svg{width:21px;height:21px;display:block}
+.app-nav a.on{color:#0f6f5c;font-weight:600;background:#eef6f3}
+@media (prefers-color-scheme: dark){.app-nav{background:#1b1e19;border-color:#2b2f28}.app-nav a{color:#8d948a}.app-nav a.on{color:#7fd1bd;background:#1f2b28}}
+body{padding-bottom:86px!important}
+#pwaTip{bottom:78px!important}
+#wxBox,#lanShare,#devBox,#testPush,#testPush+.btn-note,.push-note{display:none!important}
+</style>
+
+<style>
+.nav-help{border:0;background:none;color:#7a8291;font:600 15px/1 system-ui;width:38px;cursor:pointer}
+.disc-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px}
+.disc-mask[hidden]{display:none}
+.disc{background:#fff;color:#14181f;border-radius:16px;max-width:520px;padding:20px;font:14px/1.7 system-ui}
+.disc h3{margin:0 0 10px;font-size:17px}
+.disc ol{padding-left:18px;margin:0 0 14px}
+.disc li{margin:6px 0}
+.disc button{width:100%;border:0;background:#0f6f5c;color:#fff;border-radius:10px;padding:12px;font:15px system-ui}
+</style>
+<div class="disc-mask" id="disc" hidden>
+  <div class="disc">
+    <h3>使用说明</h3>
+    <ol>
+      <li><b>收益是估算</b>：按最新净值算，不等于基金公司结算单，也不含申购/赎回费。</li>
+      <li><b>7 天内别卖</b>：持有不满 7 天赎回费 1.5%，红色提醒也要等满 7 天才建议换。</li>
+      <li><b>只做参考</b>：不构成投资建议，基金有风险，盈亏自负。</li>
+      <li><b>数据可能延迟</b>：净值来自天天基金，QDII 和节假日会更晚。</li>
+    </ol>
+    <button id="discOk">我已知晓</button>
+  </div>
+</div>
+<script>
+(function () {
+  var KEY = "qfa.disc.v1";
+  var mask = document.getElementById("disc");
+  function show() { mask.hidden = false; }
+  document.getElementById("discOk").onclick = function () { try { localStorage.setItem(KEY, "1"); } catch (e) {} mask.hidden = true; };
+  var help = document.getElementById("navHelp");
+  if (help) help.onclick = show;
+  try { if (!localStorage.getItem(KEY)) setTimeout(show, 600); } catch (e) {}
+})();
+</script>
+<style>
+#fab{position:fixed;right:12px;bottom:140px;z-index:9998;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+#fab button{border:1px solid #e6e4dc;background:#fff;color:#5b6472;box-shadow:0 4px 14px rgba(0,0,0,.10);cursor:pointer}
+#fabHelp{border-radius:99px;padding:9px 14px;font:12.5px system-ui}
+#fabTop{width:42px;height:42px;border-radius:50%;font:18px/1 system-ui;display:none}
+#fabTop.show{display:block}
+</style>
+<div id="fab">
+  <button id="fabTop" aria-label="回到顶部">↑</button>
+  <button id="fabHelp">说明</button>
+</div>
+<script>
+(function(){
+  var m=document.getElementById("disc");
+  var help=document.getElementById("fabHelp");
+  var top=document.getElementById("fabTop");
+  if(help&&m) help.onclick=function(){m.hidden=false;};
+  if(top){
+    top.onclick=function(){window.scrollTo({top:0,behavior:"smooth"});};
+    var onScroll=function(){ top.classList.toggle("show", window.scrollY>260); };
+    window.addEventListener("scroll", onScroll, {passive:true});
+    onScroll();
+  }
 })();
 </script>
 </body>
